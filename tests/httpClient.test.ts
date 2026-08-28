@@ -47,6 +47,41 @@ describe("FlomoHttpClient", () => {
     await expectApiFailure({ code: -1, message: "bad payload" }, { code: "BAD_REQUEST" });
   });
 
+  it("does not expose raw or credential-like error messages", async () => {
+    vi.stubGlobal(
+      "fetch",
+      async () => new Response("authorization=Bearer secret", { status: 400 }),
+    );
+    await expect(new FlomoHttpClient(makeConfig()).requestJson("/api/v1/test")).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "flomo 请求体不符合当前接口要求。",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      async () => new Response(JSON.stringify({ code: -1, message: "cookie=session-secret" }), { status: 200 }),
+    );
+    await expect(new FlomoHttpClient(makeConfig()).requestJson("/api/v1/test")).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "flomo 返回业务错误，请检查请求参数。",
+    });
+  });
+
+  it("maps caller cancellation separately from an internal timeout", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    vi.stubGlobal("fetch", async () => {
+      throw new DOMException("Aborted", "AbortError");
+    });
+
+    await expect(
+      new FlomoHttpClient(makeConfig()).requestJson("/api/v1/test", { signal: controller.signal }),
+    ).rejects.toMatchObject({
+      code: "REMOTE_CHANGED",
+      message: "flomo 请求已取消。",
+    });
+  });
+
   it("rejects off-origin absolute endpoints before attaching credentials", async () => {
     let called = false;
     vi.stubGlobal("fetch", async () => {

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -6,8 +7,11 @@ import type { EnvConfig } from "../src/config/env.js";
 import type { FlomoReadClient } from "../src/types/flomo.js";
 import { createFlomoMcpServer } from "../src/server.js";
 import { registerGetNoteTool } from "../src/tools/getNote.js";
+import { registerRandomNoteTool } from "../src/tools/randomNote.js";
 import { registerSearchNotesTool } from "../src/tools/searchNotes.js";
 import { registerSyncNotesTool } from "../src/tools/syncNotes.js";
+
+const packageVersion = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
 describe("createFlomoMcpServer", () => {
   it("loads over MCP transport, lists tools, and serves the ping tool without flomo credentials", async () => {
@@ -28,6 +32,7 @@ describe("createFlomoMcpServer", () => {
         "get_note",
         "list_notes",
         "ping",
+        "random_note",
         "search_notes",
         "sync_notes",
       ]);
@@ -40,8 +45,9 @@ describe("createFlomoMcpServer", () => {
       expect(payload).toMatchObject({
         ok: true,
         name: "flomo-web-mcp",
-        version: "0.1.0",
+        version: packageVersion,
       });
+      expect(client.getServerVersion()?.version).toBe(packageVersion);
     } finally {
       await client.close();
       await server.close();
@@ -81,6 +87,9 @@ describe("createFlomoMcpServer", () => {
         };
       },
       async searchSynced() {
+        return [];
+      },
+      async listSynced() {
         return [];
       },
       async getSyncedBySlug() {
@@ -174,6 +183,9 @@ describe("createFlomoMcpServer", () => {
           },
         ];
       },
+      async listSynced() {
+        return [];
+      },
       async getSyncedBySlug() {
         return null;
       },
@@ -223,6 +235,83 @@ describe("createFlomoMcpServer", () => {
           complete: true,
         },
       });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("refreshes before random selection and falls back to the session sync cache", async () => {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = new McpServer({ name: "flomo-web-mcp-random-test", version: "0.0.0" });
+    const client = new Client({ name: "flomo-web-mcp-random-client", version: "0.0.0" });
+    let syncCalls = 0;
+    let failRefresh = false;
+    const cachedMemo = {
+      slug: "cached-work",
+      content: "Cached work memo",
+      tags: ["#work/project"],
+      url: "https://v.flomoapp.com/mine/?memo_id=cached-work",
+      createdAt: "2026-05-03T00:00:00.000Z",
+      updatedAt: "2026-05-03T00:00:00.000Z",
+    };
+    const readClient = {
+      async list() { return []; },
+      async search() { return []; },
+      async getBySlug() { return null; },
+      async getRecentBatch() { return []; },
+      async syncAll() {
+        syncCalls += 1;
+        if (failRefresh) {
+          throw new Error("refresh failed");
+        }
+        return { synced: 1, totalCached: 1, pages: 1, complete: true, syncedAt: "2026-05-03T00:00:00.000Z" };
+      },
+      async searchSynced() { return []; },
+      async listSynced() { return [cachedMemo]; },
+      async getSyncedBySlug() { return null; },
+      getSyncStatus() {
+        return { synced: true, totalCached: 1, complete: true, syncedAt: "2026-05-03T00:00:00.000Z" };
+      },
+    } satisfies FlomoReadClient;
+
+    registerRandomNoteTool(server, readClient, () => 0);
+
+    try {
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+
+      const refreshed = parseToolJson(await client.callTool({
+        name: "random_note",
+        arguments: { tags: ["work"], excludeTags: ["private"] },
+      }));
+      expect(refreshed).toMatchObject({
+        ok: true,
+        memo: { slug: "cached-work" },
+        candidateCount: 1,
+        refresh: { attempted: true, ok: true, fallback: null },
+        scope: { source: "all_synced_notes", complete: true },
+      });
+
+      failRefresh = true;
+      const fallback = parseToolJson(await client.callTool({ name: "random_note", arguments: {} }));
+      expect(fallback).toMatchObject({
+        ok: true,
+        memo: { slug: "cached-work" },
+        refresh: { attempted: true, ok: false, fallback: "session_sync_cache" },
+      });
+      expect(syncCalls).toBe(2);
+
+      const cacheOnly = parseToolJson(await client.callTool({
+        name: "random_note",
+        arguments: { refresh: false },
+      }));
+      expect(cacheOnly).toMatchObject({
+        ok: true,
+        memo: { slug: "cached-work" },
+        refresh: { attempted: false },
+      });
+      expect(syncCalls).toBe(2);
     } finally {
       await client.close();
       await server.close();

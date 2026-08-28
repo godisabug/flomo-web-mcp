@@ -3,6 +3,11 @@ import { requireAuthorization } from "../utils/auth.js";
 import { FlomoAuthError, FlomoParseError, FlomoRequestError } from "../utils/errors.js";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const DEFAULT_BAD_REQUEST_MESSAGE = "flomo 请求体不符合当前接口要求。";
+const DEFAULT_SIGN_INVALID_MESSAGE = "flomo Web 签名校验失败，内部接口可能已经变化。";
+const DEFAULT_BUSINESS_BAD_REQUEST_MESSAGE = "flomo 返回业务错误，请检查请求参数。";
+const DEFAULT_BUSINESS_ERROR_MESSAGE = "flomo 返回业务错误。";
+const MAX_SAFE_ERROR_MESSAGE_LENGTH = 200;
 
 export class FlomoHttpClient {
   constructor(private readonly config: EnvConfig) {}
@@ -22,7 +27,10 @@ export class FlomoHttpClient {
       text = await response.text();
     } catch (error) {
       if (isAbortError(error)) {
-        throw new FlomoRequestError("REQUEST_TIMEOUT", "flomo 请求超时，请稍后重试。", { cause: error });
+        if (abort.timedOut()) {
+          throw new FlomoRequestError("REQUEST_TIMEOUT", "flomo 请求超时，请稍后重试。", { cause: error });
+        }
+        throw new FlomoRequestError("REMOTE_CHANGED", "flomo 请求已取消。", { cause: error });
       }
 
       if (error instanceof FlomoRequestError || error instanceof FlomoAuthError) {
@@ -101,18 +109,27 @@ export class FlomoHttpClient {
     return this.config.webBaseUrl ?? this.config.baseUrl;
   }
 
-  private buildAbortSignal(inputSignal: AbortSignal | null | undefined): { signal: AbortSignal; cleanup: () => void } {
+  private buildAbortSignal(inputSignal: AbortSignal | null | undefined): {
+    signal: AbortSignal;
+    timedOut: () => boolean;
+    cleanup: () => void;
+  } {
     const controller = new AbortController();
+    let timeoutFired = false;
     const timeout = setTimeout(() => {
+      timeoutFired = true;
       controller.abort();
     }, this.requestTimeoutMs);
+    const cancelTimeout = (): void => clearTimeout(timeout);
 
     let removeInputListener = (): void => undefined;
     if (inputSignal) {
       if (inputSignal.aborted) {
+        cancelTimeout();
         controller.abort(inputSignal.reason);
       } else {
         const abortFromInput = (): void => {
+          cancelTimeout();
           controller.abort(inputSignal.reason);
         };
         inputSignal.addEventListener("abort", abortFromInput, { once: true });
@@ -122,8 +139,9 @@ export class FlomoHttpClient {
 
     return {
       signal: controller.signal,
+      timedOut: () => timeoutFired,
       cleanup: () => {
-        clearTimeout(timeout);
+        cancelTimeout();
         removeInputListener();
       },
     };
@@ -145,7 +163,7 @@ function throwHttpError(status: number, body: string): never {
   }
 
   if (status === 400) {
-    const message = extractResponseMessage(body) ?? "flomo 请求体不符合当前接口要求。";
+    const message = extractSafeResponseMessage(body) ?? DEFAULT_BAD_REQUEST_MESSAGE;
     const code = looksLikeSignError(message) ? "SIGN_INVALID" : "BAD_REQUEST";
     throw new FlomoRequestError(code, message, { status });
   }
@@ -163,19 +181,20 @@ function validateFlomoApiResponse(value: unknown): void {
     return;
   }
 
-  const message = typeof value.message === "string" && value.message.trim() ? value.message : "flomo 返回业务错误。";
-  if (value.code === -20 || looksLikeSignError(message)) {
-    throw new FlomoRequestError("SIGN_INVALID", message);
+  const safeMessage =
+    typeof value.message === "string" ? sanitizeStructuredMessage(value.message, { truncate: false }) : undefined;
+  if (value.code === -20 || (safeMessage !== undefined && looksLikeSignError(safeMessage))) {
+    throw new FlomoRequestError("SIGN_INVALID", safeMessage ?? DEFAULT_SIGN_INVALID_MESSAGE);
   }
 
   if (value.code === -1) {
-    throw new FlomoRequestError("BAD_REQUEST", message);
+    throw new FlomoRequestError("BAD_REQUEST", safeMessage ?? DEFAULT_BUSINESS_BAD_REQUEST_MESSAGE);
   }
 
-  throw new FlomoRequestError("REMOTE_CHANGED", message);
+  throw new FlomoRequestError("REMOTE_CHANGED", safeMessage ?? DEFAULT_BUSINESS_ERROR_MESSAGE);
 }
 
-function extractResponseMessage(body: string): string | undefined {
+function extractSafeResponseMessage(body: string): string | undefined {
   if (!body) {
     return undefined;
   }
@@ -183,17 +202,36 @@ function extractResponseMessage(body: string): string | undefined {
   try {
     const parsed = JSON.parse(body) as unknown;
     if (isRecord(parsed) && typeof parsed.message === "string" && parsed.message.trim()) {
-      return parsed.message;
+      return sanitizeStructuredMessage(parsed.message, { truncate: true });
     }
   } catch {
-    return body;
+    return undefined;
   }
 
-  return body;
+  return undefined;
+}
+
+function sanitizeStructuredMessage(message: string, options: { truncate: boolean }): string | undefined {
+  const normalized = message.replace(/\s+/g, " ").trim();
+  if (!normalized || looksLikeHtml(normalized) || containsSensitiveKey(normalized)) {
+    return undefined;
+  }
+  if (normalized.length > MAX_SAFE_ERROR_MESSAGE_LENGTH) {
+    return options.truncate ? `${normalized.slice(0, MAX_SAFE_ERROR_MESSAGE_LENGTH - 3)}...` : undefined;
+  }
+  return normalized;
 }
 
 function looksLikeSignError(message: string): boolean {
   return /sign|signature|签名/i.test(message);
+}
+
+function looksLikeHtml(message: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(message) || /<!doctype/i.test(message);
+}
+
+function containsSensitiveKey(message: string): boolean {
+  return /authorization|cookie|token|bearer/i.test(message);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -201,5 +239,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
+  return isRecord(error) && error.name === "AbortError";
 }

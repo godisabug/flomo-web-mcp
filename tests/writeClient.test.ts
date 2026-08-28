@@ -11,7 +11,9 @@ describe("formatCreateContent", () => {
   });
 
   it("escapes HTML-like content by default and appends tags as a paragraph", () => {
-    expect(formatCreateContent("<p>Hello</p>", ["mcp"])).toBe("<p>&lt;p&gt;Hello&lt;/p&gt;</p><p>#mcp</p>");
+    expect(formatCreateContent("<p>Hello's</p>", ["mcp"])).toBe(
+      "<p>&lt;p&gt;Hello&#39;s&lt;/p&gt;</p><p>#mcp</p>",
+    );
   });
 });
 
@@ -112,6 +114,26 @@ describe("BearerFlomoWriteClient", () => {
 
     await expect(client.create({ content: "   " })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(called).toBe(false);
+  });
+
+  it("skips content-like wrappers without a slug when extracting the created memo", async () => {
+    const httpClient = {
+      async requestJson(): Promise<unknown> {
+        return {
+          code: 0,
+          data: {
+            content: "response metadata",
+            item: {
+              slug: "real-created-slug",
+              content: "<p>Hello</p>",
+            },
+          },
+        };
+      },
+    } as unknown as FlomoHttpClient;
+    const client = new BearerFlomoWriteClient(makeConfig(), httpClient);
+
+    await expect(client.create({ content: "Hello" })).resolves.toMatchObject({ slug: "real-created-slug" });
   });
 });
 

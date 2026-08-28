@@ -1,6 +1,6 @@
 # flomo-web-mcp
 
-`flomo-web-mcp` 是一个本地运行的 flomo MCP stdio server。它使用你自己的 flomo Web 登录态凭据，为支持 Model Context Protocol 的客户端提供 memo 读取、搜索、同步和新建能力。
+`flomo-web-mcp` 是一个本地运行的 flomo MCP stdio server。它使用你自己的 flomo Web 登录态凭据，为支持 Model Context Protocol 的客户端提供 memo 读取、搜索、同步、随机漫游和新建能力。
 
 > 本项目不是 flomo 官方项目。它依赖 flomo Web 的内部接口和会话凭据，接口可能变化；请只在你信任的本地环境中运行。
 
@@ -18,8 +18,9 @@
 
 - 作为本地 stdio MCP server 运行，可接入支持 MCP 的客户端。
 - 使用你的 flomo Web 会话凭据访问 memo，不需要 flomo Pro。
-- 支持查看最近 memo、按 `slug` 获取单条 memo、创建新 memo。
+- 支持查看最近 memo、按 `slug` 获取单条 memo、随机漫游和创建新 memo。
 - 支持分页同步 memo 到本地内存缓存，并在显式指定范围时执行全库搜索或定位。
+- 保留 memo 的换行和富文本结构，并支持图片或附件-only memo 的文件 metadata。
 
 ## 运行流程
 
@@ -27,18 +28,18 @@
 flowchart LR
   Host["MCP 客户端"] -->|启动 stdio server| Server["flomo-web-mcp"]
   Server -->|读取 env| Config["本地配置<br/>FLOMO_AUTHORIZATION 等"]
-  Server -->|注册工具| Tools["MCP 工具<br/>list / sync / search / get / create"]
+  Server -->|注册工具| Tools["MCP 工具<br/>list / sync / search / get / random / create"]
   Host -->|调用工具| Tools
   Tools -->|请求 flomo Web| Flomo["flomo Web 内部接口"]
   Flomo -->|返回 memo 数据| Parser["解析与错误映射"]
   Parser -->|返回 MCP 响应| Host
   Tools -->|sync_notes| Cache["本地内存缓存"]
-  Cache -->|search_notes / get_note<br/>scope: all_synced_notes| Tools
+  Cache -->|search_notes / get_note / random_note| Tools
 ```
 
 ## 要求
 
-- Node.js 20 或更高版本。
+- Node.js 20.19.0 或更高版本。
 - npm。
 - 支持 stdio MCP server 的客户端。
 - 你自己的 flomo Web 会话 `Authorization`，必要时还包括 `Cookie`。
@@ -169,6 +170,7 @@ FLOMO_AUTHORIZATION=Bearer your-token-here
 | `sync_notes` | 分页同步 memo 到本地内存缓存，只返回同步统计。 |
 | `search_notes` | 默认搜索最近 memo；传入 `scope: "all_synced_notes"` 时搜索已同步缓存。 |
 | `get_note` | 默认按 `slug` 从最近 memo 定位；传入 `scope: "all_synced_notes"` 时从已同步缓存定位。 |
+| `random_note` | 默认刷新全量 memo 后随机返回一条；支持 `tags`、`excludeTags` 和 `refresh: false`，刷新失败时回退当前会话缓存。 |
 | `create_note` | 新建 memo。 |
 
 ## 全量同步边界
@@ -183,19 +185,29 @@ FLOMO_AUTHORIZATION=Bearer your-token-here
 
 `sync_notes` 支持 `pageSize`（最大 200）和 `maxPages`（最大 100）。如果达到页数上限但仍可能有更多笔记，返回值中的 `complete` 会是 `false`。
 
+`random_note` 默认会先执行全量同步，再从结果中随机选择一条 memo。可传入 `tags` 作为白名单、`excludeTags` 作为黑名单；父级 tag 会匹配其层级子 tag，黑名单优先。如果刷新失败但当前 server session 已有同步缓存，工具会从缓存中选择并在 `refresh` metadata 中说明回退；传入 `refresh: false` 可直接使用现有缓存。
+
+```json
+{
+  "tags": ["work", "idea"],
+  "excludeTags": ["private"],
+  "refresh": false
+}
+```
+
+该 Session Sync Cache 只存在于当前 server session，不是持久存储、备份或权威数据源。
+
 ## 相关项目
 
-- [flomo-web-cli](https://github.com/godisabug/flomo-web-cli)：同一 flomo Web 访问逻辑的命令行工具，适合在终端或脚本里直接操作 flomo memo。
+- [flomo-web-cli](https://github.com/godisabug/flomo-web-cli)：共享同一 flomo Core 行为的命令行形式，适合在终端或脚本里直接操作 flomo memo。
 - `flomo-web-mcp`：当前项目，适合接入支持 Model Context Protocol 的客户端。
 
 ## 获取 Authorization
 
-1. 浏览器登录 flomo Web。
-2. 打开 DevTools 的 Network。
-3. 刷新页面。
-4. 找到 flomo 的 XHR/fetch 请求。
-5. 从 Request Headers 复制 `Authorization: Bearer ...`。
-6. 写入 MCP 客户端配置或本地 `.env` 的 `FLOMO_AUTHORIZATION`。
+1. 使用 Edge 或 Chrome 登录 flomo Web，并打开 DevTools 的 Network。
+2. 刷新页面，在 Fetch/XHR 请求中筛选 `/api/v1/memo/updated` 或其他 flomo memo 请求。
+3. 打开请求，在 Request Headers 中复制完整的 `Authorization: Bearer ...` 值。
+4. 将其写入 MCP 客户端配置或本地 `.env` 的 `FLOMO_AUTHORIZATION`；不要提交或分享该值。
 
 ## 安全提醒
 

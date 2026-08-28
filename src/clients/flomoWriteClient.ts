@@ -45,7 +45,7 @@ export class BearerFlomoWriteClient implements FlomoWriteClient {
   }
 }
 
-export function formatCreateContent(content: string, tags: string[] | undefined): string {
+export function formatCreateContent(content: string, tags?: unknown): string {
   const normalizedTags = normalizeTags(tags);
   const trimmedContent = formatContentHtml(content);
   if (normalizedTags.length === 0) {
@@ -56,32 +56,41 @@ export function formatCreateContent(content: string, tags: string[] | undefined)
 }
 
 function extractCreatedMemo(raw: unknown): unknown {
-  if (isMemoLike(raw)) {
-    return raw;
+  const direct = tryExtractCreatedMemo(raw);
+  if (direct) {
+    return direct;
   }
-
-  if (!isRecord(raw)) {
-    throw new FlomoRequestError("PARSER_FAILED", "写入接口返回体不是对象。");
-  }
-
-  const candidates = [raw.memo, raw.data, raw.item, raw.result];
-  for (const candidate of candidates) {
-    if (isMemoLike(candidate)) {
-      return candidate;
-    }
-    if (isRecord(candidate)) {
-      const nested = [candidate.memo, candidate.data, candidate.item, candidate.result].find(isMemoLike);
+  if (isRecord(raw)) {
+    for (const value of Object.values(raw)) {
+      const nested = tryExtractCreatedMemo(value);
       if (nested) {
         return nested;
       }
     }
   }
-
   throw new FlomoRequestError("PARSER_FAILED", "写入接口返回体中找不到创建后的 memo 对象。");
 }
 
-function isMemoLike(value: unknown): value is Record<string, unknown> {
-  return isRecord(value) && ("content" in value || "text" in value || "html" in value);
+function tryExtractCreatedMemo(raw: unknown): unknown | undefined {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+  for (const key of ["memo", "data", "item", "result"]) {
+    const nested = tryExtractCreatedMemo(raw[key]);
+    if (nested) {
+      return nested;
+    }
+  }
+  return looksLikeMemo(raw) ? raw : undefined;
+}
+
+function looksLikeMemo(raw: Record<string, unknown>): boolean {
+  return hasAnyKey(raw, ["slug", "memo_slug", "memo_id", "id"]) &&
+    hasAnyKey(raw, ["content", "html", "text", "plain_text", "plainText", "rich_text", "source_content", "summary"]);
+}
+
+function hasAnyKey(raw: Record<string, unknown>, keys: string[]): boolean {
+  return keys.some((key) => raw[key] !== undefined);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -104,7 +113,8 @@ function escapeHtml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 export function formatFlomoLocalDateTime(timezone: string, date = new Date()): string {

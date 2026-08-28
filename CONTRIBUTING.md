@@ -10,7 +10,7 @@ npm run build
 npm run verify
 ```
 
-Use Node.js 20 or newer.
+Use Node.js 20.19.0 or newer.
 
 ## Development Workflow
 
@@ -19,6 +19,21 @@ Use Node.js 20 or newer.
 - Do not commit `.env`, tokens, cookies, memo content, HAR files, or raw flomo responses.
 - Keep MCP tool documentation aligned with `src/server.ts` and `scripts/smoke-stdio.mjs`.
 - Prefer small pull requests with a clear problem statement and verification notes.
+
+## Shared Core Sync
+
+- Record the source CLI tag and commit in `docs/shared-core-sync.md` for each synchronized release.
+- Port equivalent flomo-facing behavior and test cases; do not compare adapter source files byte-for-byte.
+- Keep CLI-only persistence and command concerns outside the MCP adapter.
+- Use the same package version for Shared Core releases. Adapter-only releases may diverge until the next synchronized release.
+
+## Release
+
+1. Update `package.json`, `package-lock.json`, `CHANGELOG.md`, and the Shared Core Baseline.
+2. Run `npm run verify` and inspect `npm pack --dry-run --json`.
+3. Confirm the target version is unpublished and authenticate with npm.
+4. Commit the release, create and push the matching `vX.Y.Z` tag, then run `npm publish --access public`.
+5. Verify the registry version and installed package smoke test.
 
 ## Package Boundary
 

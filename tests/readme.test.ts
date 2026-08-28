@@ -10,5 +10,8 @@ describe("README", () => {
     expect(readme).toContain("## 相关项目");
     expect(readme).toContain("https://github.com/godisabug/flomo-web-cli");
     expect(readme).toContain("flomo-web-cli");
+    expect(readme).toContain("`random_note`");
+    expect(readme).toContain('"refresh": false');
+    expect(readme).toContain("Session Sync Cache");
   });
 });

@@ -19,8 +19,8 @@ export function allSyncedNotesScope(
     source: "all_synced_notes",
     complete,
     description: complete
-      ? "Results come from the locally synced flomo cache."
-      : "Results come from the locally synced flomo cache, but the sync stopped before reaching the end.",
+      ? "Results come from the current server session's sync cache."
+      : "Results come from the current server session's sync cache, but the sync stopped before reaching the end.",
     ...(syncedAt ? { syncedAt } : {}),
   };
 }

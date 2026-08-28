@@ -31,6 +31,25 @@ describe("filterMemos", () => {
 });
 
 describe("BearerFlomoReadClient", () => {
+  it("sorts recent notes by created time before applying the list limit", async () => {
+    const httpClient = {
+      async requestJson(): Promise<unknown> {
+        return {
+          code: 0,
+          data: [
+            { slug: "old", content: "Old", created_at: "2026-05-01T00:00:00.000Z" },
+            { slug: "new", content: "New", created_at: "2026-05-03T00:00:00.000Z" },
+            { slug: "middle", content: "Middle", created_at: "2026-05-02T00:00:00.000Z" },
+          ],
+        };
+      },
+    } as unknown as FlomoHttpClient;
+
+    const client = new BearerFlomoReadClient(makeConfig(), httpClient);
+
+    await expect(client.list(2)).resolves.toMatchObject([{ slug: "new" }, { slug: "middle" }]);
+  });
+
   it("uses the default signed flomo web endpoint and parses response data", async () => {
     let capturedEndpoint = "";
     const httpClient = {
@@ -269,6 +288,9 @@ describe("BearerFlomoReadClient", () => {
     const client = new BearerFlomoReadClient(makeConfig(), httpClient);
 
     await expect(client.searchSynced("missing")).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    await expect(client.listSynced()).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
   });

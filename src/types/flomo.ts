@@ -36,6 +36,7 @@ export interface FlomoReadClient {
   getRecentBatch(cursor?: string): Promise<Memo[]>;
   syncAll(options?: SyncNotesOptions): Promise<SyncNotesResult>;
   searchSynced(query: string, limit?: number): Promise<Memo[]>;
+  listSynced(): Promise<Memo[]>;
   getSyncedBySlug(slug: string): Promise<Memo | null>;
   getSyncStatus(): SyncNotesStatus;
 }

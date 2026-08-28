@@ -7,13 +7,15 @@ import { registerCreateNoteTool } from "./tools/createNote.js";
 import { registerGetNoteTool } from "./tools/getNote.js";
 import { jsonToolResponse } from "./tools/common.js";
 import { registerListNotesTool } from "./tools/listNotes.js";
+import { registerRandomNoteTool } from "./tools/randomNote.js";
 import { registerSearchNotesTool } from "./tools/searchNotes.js";
 import { registerSyncNotesTool } from "./tools/syncNotes.js";
+import { packageInfo } from "./packageInfo.js";
 
 export function createFlomoMcpServer(config: EnvConfig): McpServer {
   const server = new McpServer({
-    name: "flomo-web-mcp",
-    version: "0.1.0",
+    name: packageInfo.name,
+    version: packageInfo.version,
   });
 
   const httpClient = new FlomoHttpClient(config);
@@ -23,14 +25,15 @@ export function createFlomoMcpServer(config: EnvConfig): McpServer {
   server.tool("ping", "Check whether the flomo MCP server is reachable.", {}, async () =>
     jsonToolResponse({
       ok: true,
-      name: "flomo-web-mcp",
-      version: "0.1.0",
+      name: packageInfo.name,
+      version: packageInfo.version,
     }),
   );
 
   registerCreateNoteTool(server, writeClient);
   registerListNotesTool(server, readClient);
   registerSyncNotesTool(server, readClient);
+  registerRandomNoteTool(server, readClient);
   registerSearchNotesTool(server, readClient);
   registerGetNoteTool(server, readClient);
 
