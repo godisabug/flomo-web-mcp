@@ -10,10 +10,16 @@ export interface MemoPageCursor {
 export interface SyncNotesOptions {
   pageSize?: number;
   maxPages?: number;
+  /** Ignore the existing Session Sync Cache and sync from the beginning. */
+  full?: boolean;
 }
 
 export interface SyncNotesResult {
+  mode: "full" | "incremental";
+  /** Memos added or updated by this run. */
   synced: number;
+  /** Memos removed from the cache because flomo reported them deleted. */
+  removed: number;
   totalCached: number;
   pages: number;
   complete: boolean;

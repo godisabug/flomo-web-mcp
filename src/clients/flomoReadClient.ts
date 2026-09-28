@@ -29,7 +29,8 @@ export class BearerFlomoReadClient implements FlomoReadClient {
     complete: boolean;
     items: Memo[];
     syncedAt: string;
-    nextCursor?: MemoPageCursor;
+    /** Cursor of the last memo received; the next sync continues after it. */
+    resumeCursor?: MemoPageCursor;
   };
   private syncInFlight?: { key: string; promise: Promise<SyncNotesResult> };
 
@@ -61,7 +62,9 @@ export class BearerFlomoReadClient implements FlomoReadClient {
     const endpoint = this.buildReadEndpoint(this.config.readEndpoint ?? DEFAULT_READ_ENDPOINT);
     const raw = await this.httpClient.requestJson<unknown>(endpoint);
     const rawItems = extractMemoArray(raw);
-    const items = rawItems.map((item) => parseMemo(item, this.config.webBaseUrl ?? this.config.baseUrl, this.config.timezone));
+    const items = rawItems.map((item) =>
+      parseMemo(item, this.config.webBaseUrl ?? this.config.baseUrl, this.config.timezone),
+    );
     this.cache = {
       expiresAt: Date.now() + CACHE_TTL_MS,
       items,
@@ -72,12 +75,13 @@ export class BearerFlomoReadClient implements FlomoReadClient {
   async syncAll(options: SyncNotesOptions = {}): Promise<SyncNotesResult> {
     const pageSize = normalizeBoundedInteger(options.pageSize, DEFAULT_SYNC_PAGE_SIZE, MAX_SYNC_PAGE_SIZE);
     const maxPages = normalizeBoundedInteger(options.maxPages, DEFAULT_SYNC_MAX_PAGES, MAX_SYNC_MAX_PAGES);
-    const key = `${pageSize}:${maxPages}`;
+    const full = options.full === true;
+    const key = `${pageSize}:${maxPages}:${full}`;
     if (this.syncInFlight?.key === key) {
       return this.syncInFlight.promise;
     }
 
-    const promise = this.runSync(pageSize, maxPages).finally(() => {
+    const promise = this.runSync(pageSize, maxPages, full).finally(() => {
       if (this.syncInFlight?.promise === promise) {
         this.syncInFlight = undefined;
       }
@@ -86,10 +90,15 @@ export class BearerFlomoReadClient implements FlomoReadClient {
     return promise;
   }
 
-  private async runSync(pageSize: number, maxPages: number): Promise<SyncNotesResult> {
-    const bySlug = new Map<string, Memo>();
-    let cursor: MemoPageCursor | undefined = { latestUpdatedAt: 0, latestSlug: "" };
-    let nextCursor: MemoPageCursor | undefined;
+  private async runSync(pageSize: number, maxPages: number, full: boolean): Promise<SyncNotesResult> {
+    // The sync endpoint returns every memo changed after the cursor, deletions included, so an
+    // existing cache only needs the changes since its resume cursor.
+    const previous = full ? undefined : this.syncedCache;
+    const bySlug = new Map<string, Memo>(previous?.items.map((item) => [item.slug, item]) ?? []);
+    const upserted = new Set<string>();
+    let removed = 0;
+    let resumeCursor = previous?.resumeCursor;
+    let cursor: MemoPageCursor = resumeCursor ?? { latestUpdatedAt: 0, latestSlug: "" };
     let complete = false;
     let pages = 0;
 
@@ -99,16 +108,24 @@ export class BearerFlomoReadClient implements FlomoReadClient {
 
       for (const item of page.items) {
         bySlug.set(item.slug, item);
+        upserted.add(item.slug);
+      }
+      for (const slug of page.deletedSlugs) {
+        upserted.delete(slug);
+        if (bySlug.delete(slug)) {
+          removed += 1;
+        }
       }
 
-      nextCursor = page.nextCursor;
-      if (page.rawCount === 0 || page.rawCount < pageSize || !nextCursor) {
+      if (page.nextCursor) {
+        resumeCursor = page.nextCursor;
+      }
+      if (page.rawCount === 0 || page.rawCount < pageSize || !page.nextCursor) {
         complete = true;
-        nextCursor = undefined;
         break;
       }
 
-      cursor = nextCursor;
+      cursor = page.nextCursor;
     }
 
     const syncedAt = new Date().toISOString();
@@ -117,11 +134,14 @@ export class BearerFlomoReadClient implements FlomoReadClient {
       complete,
       items,
       syncedAt,
-      nextCursor,
+      resumeCursor,
     };
+    const nextCursor = complete ? undefined : resumeCursor;
 
     return {
-      synced: items.length,
+      mode: previous ? "incremental" : "full",
+      synced: upserted.size,
+      removed,
       totalCached: items.length,
       pages,
       complete,
@@ -156,7 +176,9 @@ export class BearerFlomoReadClient implements FlomoReadClient {
       totalCached: this.syncedCache.items.length,
       complete: this.syncedCache.complete,
       syncedAt: this.syncedCache.syncedAt,
-      ...(this.syncedCache.nextCursor ? { nextCursor: this.syncedCache.nextCursor } : {}),
+      ...(!this.syncedCache.complete && this.syncedCache.resumeCursor
+        ? { nextCursor: this.syncedCache.resumeCursor }
+        : {}),
     };
   }
 
@@ -178,8 +200,9 @@ export class BearerFlomoReadClient implements FlomoReadClient {
     return appendQueryString(endpoint, params);
   }
 
-  private async getSyncPage(cursor: MemoPageCursor | undefined, pageSize: number): Promise<{
+  private async getSyncPage(cursor: MemoPageCursor, pageSize: number): Promise<{
     items: Memo[];
+    deletedSlugs: string[];
     rawCount: number;
     nextCursor?: MemoPageCursor;
   }> {
@@ -191,20 +214,24 @@ export class BearerFlomoReadClient implements FlomoReadClient {
       items: rawItems
         .filter((item) => !isDeletedMemo(item))
         .map((item) => parseMemo(item, this.config.webBaseUrl ?? this.config.baseUrl, this.config.timezone)),
+      deletedSlugs: rawItems
+        .filter(isDeletedMemo)
+        .flatMap((item) => (isRecord(item) ? [pickString(item, ["slug", "memo_slug", "memo_id", "id"])] : []))
+        .filter((slug): slug is string => slug !== undefined),
       rawCount: rawItems.length,
       nextCursor: extractNextCursor(rawItems, this.config.timezone),
     };
   }
 
-  private buildSyncEndpoint(endpoint: string, cursor: MemoPageCursor | undefined, pageSize: number): string {
+  private buildSyncEndpoint(endpoint: string, cursor: MemoPageCursor, pageSize: number): string {
     if (/[?&]sign=/.test(endpoint)) {
       return endpoint;
     }
 
     const params = buildFlomoWebQuery({
       limit: pageSize,
-      latest_updated_at: cursor?.latestUpdatedAt ?? 0,
-      latest_slug: cursor?.latestSlug ?? "",
+      latest_updated_at: cursor.latestUpdatedAt,
+      latest_slug: cursor.latestSlug,
       tz: getFlomoTz(this.config.timezone),
     });
     return appendQueryString(endpoint, params);

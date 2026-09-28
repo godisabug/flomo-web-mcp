@@ -98,6 +98,8 @@ describe("createFlomoMcpServer", () => {
       },
       async syncAll() {
         return {
+          mode: "full" as const,
+          removed: 0,
           synced: 0,
           totalCached: 0,
           pages: 0,
@@ -177,7 +179,15 @@ describe("createFlomoMcpServer", () => {
       async getBySlug() { return richMemo; },
       async getRecentBatch() { return [richMemo]; },
       async syncAll() {
-        return { synced: 1, totalCached: 1, pages: 1, complete: true, syncedAt: "2026-05-03T00:00:00.000Z" };
+        return {
+          mode: "full" as const,
+          removed: 0,
+          synced: 1,
+          totalCached: 1,
+          pages: 1,
+          complete: true,
+          syncedAt: "2026-05-03T00:00:00.000Z",
+        };
       },
       async searchSynced() { return [richMemo]; },
       async listSynced() { return [richMemo]; },
@@ -241,6 +251,8 @@ describe("createFlomoMcpServer", () => {
       },
       async syncAll() {
         return {
+          mode: "full" as const,
+          removed: 0,
           synced: 12,
           totalCached: 12,
           pages: 2,
@@ -342,7 +354,15 @@ describe("createFlomoMcpServer", () => {
         if (failRefresh) {
           throw new Error("refresh failed");
         }
-        return { synced: 1, totalCached: 1, pages: 1, complete: true, syncedAt: "2026-05-03T00:00:00.000Z" };
+        return {
+          mode: "full" as const,
+          removed: 0,
+          synced: 1,
+          totalCached: 1,
+          pages: 1,
+          complete: true,
+          syncedAt: "2026-05-03T00:00:00.000Z",
+        };
       },
       async searchSynced() { return []; },
       async listSynced() { return [cachedMemo]; },
@@ -419,7 +439,7 @@ describe("createFlomoMcpServer", () => {
       async syncAll() {
         syncCalls += 1;
         synced = true;
-        return { synced: 1, totalCached: 1, pages: 1, complete: true, syncedAt };
+        return { mode: "full" as const, removed: 0, synced: 1, totalCached: 1, pages: 1, complete: true, syncedAt };
       },
       async searchSynced() { return []; },
       async listSynced() { return [memo]; },
@@ -478,7 +498,15 @@ describe("createFlomoMcpServer", () => {
       async getBySlug() { return null; },
       async getRecentBatch() { return recent; },
       async syncAll() {
-        return { synced: 4, totalCached: 4, pages: 1, complete: true, syncedAt: "2026-05-03T00:00:00.000Z" };
+        return {
+          mode: "full" as const,
+          removed: 0,
+          synced: 4,
+          totalCached: 4,
+          pages: 1,
+          complete: true,
+          syncedAt: "2026-05-03T00:00:00.000Z",
+        };
       },
       async searchSynced() { return []; },
       async listSynced() { return synced; },

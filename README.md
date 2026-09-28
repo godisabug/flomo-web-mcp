@@ -167,7 +167,7 @@ FLOMO_AUTHORIZATION=Bearer your-token-here
 | --- | --- |
 | `ping` | 检查 server 是否可用。 |
 | `list_notes` | 列出最近 memo。 |
-| `sync_notes` | 分页同步 memo 到本地内存缓存，只返回同步统计。 |
+| `sync_notes` | 分页同步 memo 到本地内存缓存，只返回同步统计；已有缓存时只拉取上次同步后的变更，`full: true` 强制全量重建。 |
 | `list_tags` | 列出 tag 及使用次数，按次数降序；默认统计最近 memo，传入 `scope: "all_synced_notes"` 时统计已同步缓存。 |
 | `search_notes` | 默认搜索最近 memo；传入 `scope: "all_synced_notes"` 时搜索已同步缓存。 |
 | `get_note` | 默认按 `slug` 从最近 memo 定位；传入 `scope: "all_synced_notes"` 时从已同步缓存定位；传入 `includeHtml: true` 时额外返回原始富文本 HTML。 |
@@ -186,7 +186,9 @@ FLOMO_AUTHORIZATION=Bearer your-token-here
 }
 ```
 
-`sync_notes` 支持 `pageSize`（最大 200）和 `maxPages`（最大 100）。如果达到页数上限但仍可能有更多笔记，返回值中的 `complete` 会是 `false`。
+`sync_notes` 支持 `pageSize`（最大 200）和 `maxPages`（最大 100）。如果达到页数上限但仍可能有更多笔记，返回值中的 `complete` 会是 `false`，再次调用会从中断处继续。
+
+首次同步会拉取全部 memo；之后再调用 `sync_notes`（包括 `random_note` 的自动刷新）只拉取上次同步之后新增、修改或删除的 memo，并合并进缓存。返回值中的 `mode` 为 `full` 或 `incremental`，`synced` 是本次新增或更新的数量，`removed` 是本次移除的已删除 memo 数量，`totalCached` 是缓存总数。如果缓存看起来不对，可传入 `full: true` 丢弃缓存并重新全量同步。
 
 `random_note` 在当前会话没有同步缓存、或缓存已超过 10 分钟时，会先执行全量同步，再从结果中随机选择一条 memo；`refresh: true` 强制同步，`refresh: false` 始终使用现有缓存。可传入 `tags` 作为白名单、`excludeTags` 作为黑名单；父级 tag 会匹配其层级子 tag，黑名单优先。如果刷新失败但当前 server session 已有同步缓存，工具会从缓存中选择并在 `refresh` metadata 中说明回退。
 
