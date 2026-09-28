@@ -6,6 +6,8 @@ This project follows short Conventional Commit style summaries in Git history.
 
 ## [Unreleased]
 
+- `random_note` only re-syncs when the session cache is missing or older than 10 minutes; `refresh: true` still forces a sync.
+- Share one in-flight sync between concurrent `sync_notes`/`random_note` calls.
 - Register tools with `registerTool`, adding titles, parameter descriptions, and read-only/write annotations.
 - Return compact JSON and omit memo `html` by default; `get_note` accepts `includeHtml: true` to include it.
 - Keep the Session Sync Cache after `create_note`: the created memo is added to it and only the recent batch is invalidated, so `all_synced_notes` queries keep working without a re-sync.

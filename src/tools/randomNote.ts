@@ -5,6 +5,8 @@ import type { FlomoReadClient, SyncNotesStatus } from "../types/flomo.js";
 import { toPublicError } from "../utils/errors.js";
 import { allSyncedNotesScope, readOnlyToolAnnotations, runJsonTool, toPublicMemo } from "./common.js";
 
+const REFRESH_MAX_AGE_MS = 10 * 60_000;
+
 interface RandomSourceState {
   items: Awaited<ReturnType<FlomoReadClient["listSynced"]>>;
   refresh:
@@ -23,13 +25,14 @@ export function registerRandomNoteTool(
   server: McpServer,
   readClient: FlomoReadClient,
   rng: RandomSource = Math.random,
+  now: () => number = Date.now,
 ): void {
   server.registerTool(
     "random_note",
     {
       title: "Random flomo note",
       description:
-        "Refresh the all-notes session cache and select one random flomo memo, with optional tag filters and cache fallback.",
+        "Select one random flomo memo from the all-notes session cache, syncing first when the cache is missing or older than 10 minutes. Supports tag filters and falls back to the cache if a sync fails.",
       inputSchema: {
         tags: z
           .array(z.string())
@@ -42,13 +45,15 @@ export function registerRandomNoteTool(
         refresh: z
           .boolean()
           .optional()
-          .describe("Re-sync all notes before picking (default true). Set false to reuse the current session cache."),
+          .describe(
+            "true forces a re-sync before picking; false always reuses the session cache. Default: sync only when the cache is missing or older than 10 minutes.",
+          ),
       },
       annotations: readOnlyToolAnnotations,
     },
     async ({ tags, excludeTags, refresh }) =>
       runJsonTool(async () => {
-        const source = await loadRandomSource(readClient, refresh !== false);
+        const source = await loadRandomSource(readClient, refresh ?? isCacheStale(readClient.getSyncStatus(), now()));
         const selection = selectRandomMemo(source.items, { tags, excludeTags }, rng);
         return {
           ok: true,
@@ -59,6 +64,11 @@ export function registerRandomNoteTool(
         };
       }),
   );
+}
+
+function isCacheStale(status: SyncNotesStatus, now: number): boolean {
+  const syncedAt = status.syncedAt ? Date.parse(status.syncedAt) : Number.NaN;
+  return !status.synced || !Number.isFinite(syncedAt) || now - syncedAt > REFRESH_MAX_AGE_MS;
 }
 
 async function loadRandomSource(readClient: FlomoReadClient, refresh: boolean): Promise<RandomSourceState> {

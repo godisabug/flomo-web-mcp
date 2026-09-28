@@ -349,6 +349,32 @@ describe("BearerFlomoReadClient", () => {
     expect(client.getSyncStatus()).toMatchObject({ synced: false });
   });
 
+  it("shares one in-flight sync between concurrent callers", async () => {
+    let calls = 0;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const httpClient = {
+      async requestJson(): Promise<unknown> {
+        calls += 1;
+        await gate;
+        return { code: 0, data: [{ slug: "only", content: "Only", updated_at: 100 }] };
+      },
+    } as unknown as FlomoHttpClient;
+    const client = new BearerFlomoReadClient(makeConfig(), httpClient);
+
+    const first = client.syncAll();
+    const second = client.syncAll();
+    release();
+
+    await expect(Promise.all([first, second])).resolves.toMatchObject([{ synced: 1 }, { synced: 1 }]);
+    expect(calls).toBe(1);
+
+    await client.syncAll();
+    expect(calls).toBe(2);
+  });
+
   it("requires a sync before searching the full local cache", async () => {
     const httpClient = {
       async requestJson(): Promise<unknown> {

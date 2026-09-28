@@ -31,6 +31,7 @@ export class BearerFlomoReadClient implements FlomoReadClient {
     syncedAt: string;
     nextCursor?: MemoPageCursor;
   };
+  private syncInFlight?: { key: string; promise: Promise<SyncNotesResult> };
 
   constructor(
     private readonly config: EnvConfig,
@@ -71,6 +72,21 @@ export class BearerFlomoReadClient implements FlomoReadClient {
   async syncAll(options: SyncNotesOptions = {}): Promise<SyncNotesResult> {
     const pageSize = normalizeBoundedInteger(options.pageSize, DEFAULT_SYNC_PAGE_SIZE, MAX_SYNC_PAGE_SIZE);
     const maxPages = normalizeBoundedInteger(options.maxPages, DEFAULT_SYNC_MAX_PAGES, MAX_SYNC_MAX_PAGES);
+    const key = `${pageSize}:${maxPages}`;
+    if (this.syncInFlight?.key === key) {
+      return this.syncInFlight.promise;
+    }
+
+    const promise = this.runSync(pageSize, maxPages).finally(() => {
+      if (this.syncInFlight?.promise === promise) {
+        this.syncInFlight = undefined;
+      }
+    });
+    this.syncInFlight = { key, promise };
+    return promise;
+  }
+
+  private async runSync(pageSize: number, maxPages: number): Promise<SyncNotesResult> {
     const bySlug = new Map<string, Memo>();
     let cursor: MemoPageCursor | undefined = { latestUpdatedAt: 0, latestSlug: "" };
     let nextCursor: MemoPageCursor | undefined;

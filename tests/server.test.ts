@@ -392,6 +392,69 @@ describe("createFlomoMcpServer", () => {
       await server.close();
     }
   });
+
+  it("reuses a fresh session sync cache for random_note unless refresh is forced", async () => {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = new McpServer({ name: "flomo-web-mcp-random-fresh-test", version: "0.0.0" });
+    const client = new Client({ name: "flomo-web-mcp-random-fresh-client", version: "0.0.0" });
+    const syncedAt = "2026-05-03T00:00:00.000Z";
+    let now = Date.parse(syncedAt) + 60_000;
+    let syncCalls = 0;
+    let synced = false;
+    const memo = {
+      slug: "fresh",
+      content: "Fresh memo",
+      tags: [],
+      url: "https://v.flomoapp.com/mine/?memo_id=fresh",
+      createdAt: syncedAt,
+      updatedAt: syncedAt,
+    };
+    const readClient = {
+      async list() { return []; },
+      async search() { return []; },
+      async getBySlug() { return null; },
+      async getRecentBatch() { return []; },
+      async syncAll() {
+        syncCalls += 1;
+        synced = true;
+        return { synced: 1, totalCached: 1, pages: 1, complete: true, syncedAt };
+      },
+      async searchSynced() { return []; },
+      async listSynced() { return [memo]; },
+      async getSyncedBySlug() { return null; },
+      getSyncStatus() {
+        return synced
+          ? { synced: true, totalCached: 1, complete: true, syncedAt }
+          : { synced: false, totalCached: 0, complete: false };
+      },
+    } satisfies FlomoReadClient;
+
+    registerRandomNoteTool(server, readClient, () => 0, () => now);
+
+    try {
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+
+      const first = parseToolJson(await client.callTool({ name: "random_note", arguments: {} }));
+      expect(first).toMatchObject({ memo: { slug: "fresh" }, refresh: { attempted: true, ok: true } });
+      expect(syncCalls).toBe(1);
+
+      const cached = parseToolJson(await client.callTool({ name: "random_note", arguments: {} }));
+      expect(cached).toMatchObject({ memo: { slug: "fresh" }, refresh: { attempted: false } });
+      expect(syncCalls).toBe(1);
+
+      await client.callTool({ name: "random_note", arguments: { refresh: true } });
+      expect(syncCalls).toBe(2);
+
+      now = Date.parse(syncedAt) + 11 * 60_000;
+      const stale = parseToolJson(await client.callTool({ name: "random_note", arguments: {} }));
+      expect(stale).toMatchObject({ refresh: { attempted: true, ok: true } });
+      expect(syncCalls).toBe(3);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
 });
 
 function makeConfig(): EnvConfig {

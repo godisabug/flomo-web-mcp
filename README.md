@@ -170,7 +170,7 @@ FLOMO_AUTHORIZATION=Bearer your-token-here
 | `sync_notes` | 分页同步 memo 到本地内存缓存，只返回同步统计。 |
 | `search_notes` | 默认搜索最近 memo；传入 `scope: "all_synced_notes"` 时搜索已同步缓存。 |
 | `get_note` | 默认按 `slug` 从最近 memo 定位；传入 `scope: "all_synced_notes"` 时从已同步缓存定位；传入 `includeHtml: true` 时额外返回原始富文本 HTML。 |
-| `random_note` | 默认刷新全量 memo 后随机返回一条；支持 `tags`、`excludeTags` 和 `refresh: false`，刷新失败时回退当前会话缓存。 |
+| `random_note` | 从全量同步缓存中随机返回一条；缓存不存在或超过 10 分钟时先刷新。支持 `tags`、`excludeTags` 和 `refresh`，刷新失败时回退当前会话缓存。 |
 | `create_note` | 新建 memo。 |
 
 工具返回紧凑 JSON。为节省上下文，memo 默认只返回保留了换行和列表结构的 `content`，不含原始 `html`。只读工具带有 `readOnlyHint` 标注，`create_note` 标注为非只读，便于 MCP 客户端决定是否需要确认。
@@ -187,7 +187,7 @@ FLOMO_AUTHORIZATION=Bearer your-token-here
 
 `sync_notes` 支持 `pageSize`（最大 200）和 `maxPages`（最大 100）。如果达到页数上限但仍可能有更多笔记，返回值中的 `complete` 会是 `false`。
 
-`random_note` 默认会先执行全量同步，再从结果中随机选择一条 memo。可传入 `tags` 作为白名单、`excludeTags` 作为黑名单；父级 tag 会匹配其层级子 tag，黑名单优先。如果刷新失败但当前 server session 已有同步缓存，工具会从缓存中选择并在 `refresh` metadata 中说明回退；传入 `refresh: false` 可直接使用现有缓存。
+`random_note` 在当前会话没有同步缓存、或缓存已超过 10 分钟时，会先执行全量同步，再从结果中随机选择一条 memo；`refresh: true` 强制同步，`refresh: false` 始终使用现有缓存。可传入 `tags` 作为白名单、`excludeTags` 作为黑名单；父级 tag 会匹配其层级子 tag，黑名单优先。如果刷新失败但当前 server session 已有同步缓存，工具会从缓存中选择并在 `refresh` metadata 中说明回退。
 
 ```json
 {

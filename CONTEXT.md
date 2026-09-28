@@ -29,5 +29,5 @@ The session-scoped memo snapshot produced by synchronization and used for All-Sy
 _Avoid_: Memo Cache, persistent cache, backup
 
 **Random Memo Selection**:
-Selection of one eligible memo from the refreshed All-Synced Notes Scope, with the Session Sync Cache available as a fallback when refresh fails.
+Selection of one eligible memo from the All-Synced Notes Scope, refreshed first when the Session Sync Cache is missing or stale, with that cache available as a fallback when refresh fails.
 _Avoid_: Recent-note sampling, deterministic selection
