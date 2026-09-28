@@ -6,6 +6,8 @@ This project follows short Conventional Commit style summaries in Git history.
 
 ## [Unreleased]
 
+- Keep the Session Sync Cache after `create_note`: the created memo is added to it and only the recent batch is invalidated, so `all_synced_notes` queries keep working without a re-sync.
+- Return a generic message for unexpected (`UNKNOWN`) errors in every tool instead of the raw error message.
 - Interpret zoneless flomo date strings (`YYYY-MM-DD HH:mm:ss`) in `FLOMO_TIMEZONE` instead of the host timezone, fixing shifted `createdAt`/`updatedAt` and sync cursors that could skip memos on hosts outside the configured timezone.
 
 ## 0.1.6

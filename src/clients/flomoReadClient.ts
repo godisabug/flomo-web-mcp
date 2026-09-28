@@ -144,9 +144,11 @@ export class BearerFlomoReadClient implements FlomoReadClient {
     };
   }
 
-  clearCache(): void {
+  recordCreated(memo: Memo): void {
     this.cache = undefined;
-    this.syncedCache = undefined;
+    if (this.syncedCache) {
+      this.syncedCache.items = [memo, ...this.syncedCache.items.filter((item) => item.slug !== memo.slug)];
+    }
   }
 
   private buildReadEndpoint(endpoint: string): string {

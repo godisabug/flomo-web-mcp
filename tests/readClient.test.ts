@@ -301,6 +301,54 @@ describe("BearerFlomoReadClient", () => {
     });
   });
 
+  it("records a created memo into the session sync cache and invalidates the recent batch", async () => {
+    let recentCalls = 0;
+    const httpClient = {
+      async requestJson(endpoint: string): Promise<unknown> {
+        if (endpoint.includes("/memo/updated/")) {
+          return { code: 0, data: [{ slug: "synced-note", content: "Synced", updated_at: 100 }] };
+        }
+        recentCalls += 1;
+        return { code: 0, data: [{ slug: "recent-note", content: "Recent", created_at: 100 }] };
+      },
+    } as unknown as FlomoHttpClient;
+    const client = new BearerFlomoReadClient(makeConfig(), httpClient);
+
+    await client.list();
+    await client.syncAll();
+    client.recordCreated({
+      slug: "created-note",
+      content: "Created after sync",
+      tags: [],
+      url: "https://v.flomoapp.com/mine/?memo_id=created-note",
+      createdAt: "2026-05-03T00:00:00.000Z",
+      updatedAt: "2026-05-03T00:00:00.000Z",
+    });
+
+    await expect(client.searchSynced("after sync")).resolves.toMatchObject([{ slug: "created-note" }]);
+    await expect(client.getSyncedBySlug("synced-note")).resolves.toMatchObject({ slug: "synced-note" });
+    expect(client.getSyncStatus()).toMatchObject({ synced: true, totalCached: 2, complete: true });
+
+    await client.list();
+    expect(recentCalls).toBe(2);
+  });
+
+  it("does not create a session sync cache when recording a memo before any sync", async () => {
+    const httpClient = { async requestJson(): Promise<unknown> { return { code: 0, data: [] }; } } as unknown as FlomoHttpClient;
+    const client = new BearerFlomoReadClient(makeConfig(), httpClient);
+
+    client.recordCreated({
+      slug: "created-note",
+      content: "Created",
+      tags: [],
+      url: "https://v.flomoapp.com/mine/?memo_id=created-note",
+      createdAt: "",
+      updatedAt: "",
+    });
+
+    expect(client.getSyncStatus()).toMatchObject({ synced: false });
+  });
+
   it("requires a sync before searching the full local cache", async () => {
     const httpClient = {
       async requestJson(): Promise<unknown> {

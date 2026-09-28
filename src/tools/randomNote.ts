@@ -87,14 +87,9 @@ async function loadRandomSource(readClient: FlomoReadClient, refresh: boolean): 
         attempted: true,
         ok: false,
         fallback: "session_sync_cache",
-        error: toSafePublicError(error),
+        error: toPublicError(error),
       },
       status,
     };
   }
-}
-
-function toSafePublicError(error: unknown): ReturnType<typeof toPublicError> {
-  const publicError = toPublicError(error);
-  return publicError.code === "UNKNOWN" ? { code: "UNKNOWN", message: "未知错误。" } : publicError;
 }
