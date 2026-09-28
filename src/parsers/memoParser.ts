@@ -1,6 +1,7 @@
 import type { Memo, MemoFile } from "../models/memo.js";
 import { FlomoParseError } from "../utils/errors.js";
 import { htmlToText, normalizeMemoText } from "../utils/text.js";
+import { parseDateTimeInTimeZone } from "../utils/time.js";
 import { extractInlineTags, normalizeTags } from "./tagParser.js";
 
 const HTML_SOURCE_KEYS = ["html", "content", "rich_text", "source_content"];
@@ -36,7 +37,7 @@ const MEDIA_SOURCE_KEYS = [
   "videos",
 ];
 
-export function parseMemo(raw: unknown, baseUrl = "https://flomoapp.com"): Memo {
+export function parseMemo(raw: unknown, baseUrl = "https://flomoapp.com", timezone = "Asia/Shanghai"): Memo {
   if (!isRecord(raw)) {
     throw new FlomoParseError("memo 不是对象，无法解析。");
   }
@@ -61,9 +62,9 @@ export function parseMemo(raw: unknown, baseUrl = "https://flomoapp.com"): Memo 
     extractInlineTags(content),
   ]);
   const url = pickString(raw, ["url", "link", "share_url"]) ?? buildMemoUrl(baseUrl, slug);
-  const createdAt = normalizeDate(raw.created_at ?? raw.createdAt ?? raw.created_time ?? raw.created) ?? "";
+  const createdAt = normalizeDate(raw.created_at ?? raw.createdAt ?? raw.created_time ?? raw.created, timezone) ?? "";
   const updatedAt =
-    normalizeDate(raw.updated_at ?? raw.updatedAt ?? raw.updated_time ?? raw.modified_at ?? raw.modified) ?? createdAt;
+    normalizeDate(raw.updated_at ?? raw.updatedAt ?? raw.updated_time ?? raw.modified_at ?? raw.modified, timezone) ?? createdAt;
   const files = extractMemoFiles(raw);
 
   return {
@@ -154,9 +155,9 @@ function normalizeMemoFile(value: unknown, sourceKey: string): MemoFile | undefi
   return Object.keys(file).length > 0 ? file : undefined;
 }
 
-function normalizeDate(value: unknown): string | undefined {
+function normalizeDate(value: unknown, timezone: string): string | undefined {
   if (typeof value === "string" && value.trim()) {
-    const parsed = Date.parse(value);
+    const parsed = parseDateTimeInTimeZone(value, timezone);
     return Number.isFinite(parsed) ? new Date(parsed).toISOString() : value;
   }
   if (typeof value === "number" && Number.isFinite(value)) {

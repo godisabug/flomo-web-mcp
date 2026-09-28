@@ -46,6 +46,27 @@ describe("parseMemo", () => {
     expect(memo.createdAt).toBe("2024-03-09T16:00:00.000Z");
   });
 
+  it("interprets zoneless flomo date strings in the configured timezone, not the host timezone", () => {
+    const memo = parseMemo(
+      { slug: "zoneless", content: "Hello", created_at: "2026-05-03 12:00:00", updated_at: "2026-01-15 08:30:00" },
+      "https://flomoapp.com",
+      "America/New_York",
+    );
+
+    expect(memo.createdAt).toBe("2026-05-03T16:00:00.000Z");
+    expect(memo.updatedAt).toBe("2026-01-15T13:30:00.000Z");
+  });
+
+  it("keeps explicit offsets in flomo date strings", () => {
+    const memo = parseMemo(
+      { slug: "offset", content: "Hello", created_at: "2026-05-03T12:00:00+08:00" },
+      "https://flomoapp.com",
+      "America/New_York",
+    );
+
+    expect(memo.createdAt).toBe("2026-05-03T04:00:00.000Z");
+  });
+
   it("preserves invalid numeric HTML entities instead of failing the whole memo", () => {
     const memo = parseMemo({
       slug: "bad-entity",

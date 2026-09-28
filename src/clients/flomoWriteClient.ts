@@ -41,7 +41,7 @@ export class BearerFlomoWriteClient implements FlomoWriteClient {
 
     const rawMemo = extractCreatedMemo(raw);
     this.onCreated?.();
-    return parseMemo(rawMemo, this.config.webBaseUrl ?? this.config.baseUrl);
+    return parseMemo(rawMemo, this.config.webBaseUrl ?? this.config.baseUrl, this.config.timezone);
   }
 }
 

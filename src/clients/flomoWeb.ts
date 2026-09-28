@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { getTimeZoneOffsetMinutes } from "../utils/time.js";
 
 const FLOMO_WEB_SIGN_SECRET = "dbbc3dd73364b4084c3a69346e0ce2b2";
 const DEFAULT_API_KEY = "flomo_web";
@@ -104,29 +105,4 @@ function toUrlSearchParams(params: FlomoWebParams): URLSearchParams {
 
 function isSignableValue(value: FlomoWebParamValue): value is FlomoWebParamPrimitive | FlomoWebParamPrimitive[] {
   return Array.isArray(value) || Boolean(value) || value === 0;
-}
-
-function getTimeZoneOffsetMinutes(timezone: string, date: Date): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  const utcMilliseconds = Date.UTC(
-    Number(values.get("year")),
-    Number(values.get("month")) - 1,
-    Number(values.get("day")),
-    Number(values.get("hour")),
-    Number(values.get("minute")),
-    Number(values.get("second")),
-  );
-
-  return Math.round((utcMilliseconds - date.getTime()) / 60_000);
 }

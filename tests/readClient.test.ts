@@ -129,6 +129,29 @@ describe("BearerFlomoReadClient", () => {
     expect(calls).toBe(1);
   });
 
+  it("builds sync cursors from zoneless updated_at strings in the configured timezone", async () => {
+    const capturedEndpoints: string[] = [];
+    const httpClient = {
+      async requestJson(endpoint: string): Promise<unknown> {
+        capturedEndpoints.push(endpoint);
+        if (capturedEndpoints.length === 1) {
+          return {
+            code: 0,
+            data: [{ slug: "cursor-note", content: "Cursor", updated_at: "2026-05-03 12:00:00" }],
+          };
+        }
+        return { code: 0, data: [] };
+      },
+    } as unknown as FlomoHttpClient;
+
+    const client = new BearerFlomoReadClient(makeConfig({ timezone: "America/New_York" }), httpClient);
+    await client.syncAll({ pageSize: 1, maxPages: 2 });
+
+    const query = new URL(`https://example.test${capturedEndpoints[1]}`).searchParams;
+    expect(query.get("latest_updated_at")).toBe(String(Date.UTC(2026, 4, 3, 16) / 1000));
+    expect(query.get("latest_slug")).toBe("cursor-note");
+  });
+
   it("syncs paged notes into a local cache without duplicating cursor rows", async () => {
     const capturedEndpoints: string[] = [];
     const httpClient = {

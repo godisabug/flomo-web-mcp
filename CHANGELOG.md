@@ -6,6 +6,8 @@ This project follows short Conventional Commit style summaries in Git history.
 
 ## [Unreleased]
 
+- Interpret zoneless flomo date strings (`YYYY-MM-DD HH:mm:ss`) in `FLOMO_TIMEZONE` instead of the host timezone, fixing shifted `createdAt`/`updatedAt` and sync cursors that could skip memos on hosts outside the configured timezone.
+
 ## 0.1.6
 
 - Align the shared flomo core behavior with `flomo-web-cli` v0.1.6.
