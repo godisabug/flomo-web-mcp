@@ -28,7 +28,7 @@
 flowchart LR
   Host["MCP 客户端"] -->|启动 stdio server| Server["flomo-web-mcp"]
   Server -->|读取 env| Config["本地配置<br/>FLOMO_AUTHORIZATION 等"]
-  Server -->|注册工具| Tools["MCP 工具<br/>list / sync / search / get / random / create"]
+  Server -->|注册工具| Tools["MCP 工具<br/>list / sync / search / tags / get / random / create"]
   Host -->|调用工具| Tools
   Tools -->|请求 flomo Web| Flomo["flomo Web 内部接口"]
   Flomo -->|返回 memo 数据| Parser["解析与错误映射"]
@@ -168,6 +168,7 @@ FLOMO_AUTHORIZATION=Bearer your-token-here
 | `ping` | 检查 server 是否可用。 |
 | `list_notes` | 列出最近 memo。 |
 | `sync_notes` | 分页同步 memo 到本地内存缓存，只返回同步统计。 |
+| `list_tags` | 列出 tag 及使用次数，按次数降序；默认统计最近 memo，传入 `scope: "all_synced_notes"` 时统计已同步缓存。 |
 | `search_notes` | 默认搜索最近 memo；传入 `scope: "all_synced_notes"` 时搜索已同步缓存。 |
 | `get_note` | 默认按 `slug` 从最近 memo 定位；传入 `scope: "all_synced_notes"` 时从已同步缓存定位；传入 `includeHtml: true` 时额外返回原始富文本 HTML。 |
 | `random_note` | 从全量同步缓存中随机返回一条；缓存不存在或超过 10 分钟时先刷新。支持 `tags`、`excludeTags` 和 `refresh`，刷新失败时回退当前会话缓存。 |

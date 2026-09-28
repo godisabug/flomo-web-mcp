@@ -6,6 +6,7 @@ This project follows short Conventional Commit style summaries in Git history.
 
 ## [Unreleased]
 
+- Add `list_tags` to list tags with memo counts from recent notes or the session sync cache.
 - `random_note` only re-syncs when the session cache is missing or older than 10 minutes; `refresh: true` still forces a sync.
 - Share one in-flight sync between concurrent `sync_notes`/`random_note` calls.
 - Register tools with `registerTool`, adding titles, parameter descriptions, and read-only/write annotations.

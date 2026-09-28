@@ -7,6 +7,7 @@ import { registerCreateNoteTool } from "./tools/createNote.js";
 import { registerGetNoteTool } from "./tools/getNote.js";
 import { jsonToolResponse } from "./tools/common.js";
 import { registerListNotesTool } from "./tools/listNotes.js";
+import { registerListTagsTool } from "./tools/listTags.js";
 import { registerRandomNoteTool } from "./tools/randomNote.js";
 import { registerSearchNotesTool } from "./tools/searchNotes.js";
 import { registerSyncNotesTool } from "./tools/syncNotes.js";
@@ -42,6 +43,7 @@ export function createFlomoMcpServer(config: EnvConfig): McpServer {
   registerSyncNotesTool(server, readClient);
   registerRandomNoteTool(server, readClient);
   registerSearchNotesTool(server, readClient);
+  registerListTagsTool(server, readClient);
   registerGetNoteTool(server, readClient);
 
   return server;

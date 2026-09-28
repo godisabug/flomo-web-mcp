@@ -8,6 +8,7 @@ import type { FlomoReadClient } from "../src/types/flomo.js";
 import { createFlomoMcpServer } from "../src/server.js";
 import { registerGetNoteTool } from "../src/tools/getNote.js";
 import { registerListNotesTool } from "../src/tools/listNotes.js";
+import { registerListTagsTool } from "../src/tools/listTags.js";
 import { registerRandomNoteTool } from "../src/tools/randomNote.js";
 import { registerSearchNotesTool } from "../src/tools/searchNotes.js";
 import { registerSyncNotesTool } from "../src/tools/syncNotes.js";
@@ -32,6 +33,7 @@ describe("createFlomoMcpServer", () => {
         "create_note",
         "get_note",
         "list_notes",
+        "list_tags",
         "ping",
         "random_note",
         "search_notes",
@@ -450,6 +452,73 @@ describe("createFlomoMcpServer", () => {
       const stale = parseToolJson(await client.callTool({ name: "random_note", arguments: {} }));
       expect(stale).toMatchObject({ refresh: { attempted: true, ok: true } });
       expect(syncCalls).toBe(3);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("counts tags from recent notes or the session sync cache", async () => {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = new McpServer({ name: "flomo-web-mcp-tags-test", version: "0.0.0" });
+    const client = new Client({ name: "flomo-web-mcp-tags-client", version: "0.0.0" });
+    const memo = (slug: string, tags: string[]) => ({
+      slug,
+      content: slug,
+      tags,
+      url: `https://v.flomoapp.com/mine/?memo_id=${slug}`,
+      createdAt: "",
+      updatedAt: "",
+    });
+    const recent = [memo("a", ["#work/project", "#idea"]), memo("b", ["#idea"])];
+    const synced = [...recent, memo("c", ["#work"]), memo("d", ["#archive"])];
+    const readClient = {
+      async list() { return recent; },
+      async search() { return []; },
+      async getBySlug() { return null; },
+      async getRecentBatch() { return recent; },
+      async syncAll() {
+        return { synced: 4, totalCached: 4, pages: 1, complete: true, syncedAt: "2026-05-03T00:00:00.000Z" };
+      },
+      async searchSynced() { return []; },
+      async listSynced() { return synced; },
+      async getSyncedBySlug() { return null; },
+      getSyncStatus() {
+        return { synced: true, totalCached: 4, complete: true, syncedAt: "2026-05-03T00:00:00.000Z" };
+      },
+    } satisfies FlomoReadClient;
+
+    registerListTagsTool(server, readClient);
+
+    try {
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+
+      const recentTags = parseToolJson(await client.callTool({ name: "list_tags", arguments: {} }));
+      expect(recentTags).toMatchObject({
+        ok: true,
+        tags: [
+          { tag: "#idea", count: 2 },
+          { tag: "#work/project", count: 1 },
+        ],
+        scope: { source: "recent_notes", complete: false },
+      });
+
+      const allTags = parseToolJson(await client.callTool({
+        name: "list_tags",
+        arguments: { scope: "all_synced_notes" },
+      }));
+      expect(allTags).toMatchObject({
+        ok: true,
+        memoCount: 4,
+        tags: [
+          { tag: "#idea", count: 2 },
+          { tag: "#archive", count: 1 },
+          { tag: "#work", count: 1 },
+          { tag: "#work/project", count: 1 },
+        ],
+        scope: { source: "all_synced_notes", complete: true },
+      });
     } finally {
       await client.close();
       await server.close();
