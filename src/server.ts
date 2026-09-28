@@ -22,12 +22,19 @@ export function createFlomoMcpServer(config: EnvConfig): McpServer {
   const readClient = new BearerFlomoReadClient(config, httpClient);
   const writeClient = new BearerFlomoWriteClient(config, httpClient, (memo) => readClient.recordCreated(memo));
 
-  server.tool("ping", "Check whether the flomo MCP server is reachable.", {}, async () =>
-    jsonToolResponse({
-      ok: true,
-      name: packageInfo.name,
-      version: packageInfo.version,
-    }),
+  server.registerTool(
+    "ping",
+    {
+      title: "Ping flomo MCP server",
+      description: "Check whether the flomo MCP server is reachable.",
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () =>
+      jsonToolResponse({
+        ok: true,
+        name: packageInfo.name,
+        version: packageInfo.version,
+      }),
   );
 
   registerCreateNoteTool(server, writeClient);

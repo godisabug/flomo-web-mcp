@@ -7,6 +7,7 @@ import type { EnvConfig } from "../src/config/env.js";
 import type { FlomoReadClient } from "../src/types/flomo.js";
 import { createFlomoMcpServer } from "../src/server.js";
 import { registerGetNoteTool } from "../src/tools/getNote.js";
+import { registerListNotesTool } from "../src/tools/listNotes.js";
 import { registerRandomNoteTool } from "../src/tools/randomNote.js";
 import { registerSearchNotesTool } from "../src/tools/searchNotes.js";
 import { registerSyncNotesTool } from "../src/tools/syncNotes.js";
@@ -36,6 +37,22 @@ describe("createFlomoMcpServer", () => {
         "search_notes",
         "sync_notes",
       ]);
+      for (const tool of tools.tools) {
+        expect(tool.title, `${tool.name} title`).toBeTruthy();
+        for (const [param, schema] of Object.entries(tool.inputSchema.properties ?? {})) {
+          expect((schema as { description?: string }).description, `${tool.name}.${param} description`).toBeTruthy();
+        }
+        if (tool.name === "create_note") {
+          expect(tool.annotations).toMatchObject({
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: true,
+          });
+        } else {
+          expect(tool.annotations, `${tool.name} annotations`).toMatchObject({ readOnlyHint: true });
+        }
+      }
       expect(tools.tools.find((tool) => tool.name === "search_notes")?.description).toMatch(/recent/i);
       expect(tools.tools.find((tool) => tool.name === "get_note")?.description).toMatch(/recent/i);
 
@@ -133,6 +150,64 @@ describe("createFlomoMcpServer", () => {
           complete: false,
         },
       });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("omits memo html by default and returns it from get_note only when requested", async () => {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = new McpServer({ name: "flomo-web-mcp-html-test", version: "0.0.0" });
+    const client = new Client({ name: "flomo-web-mcp-html-client", version: "0.0.0" });
+    const richMemo = {
+      slug: "rich-note",
+      content: "Rich note",
+      html: "<p>Rich note</p>",
+      tags: [],
+      url: "https://v.flomoapp.com/mine/?memo_id=rich-note",
+      createdAt: "2026-05-03T00:00:00.000Z",
+      updatedAt: "2026-05-03T00:00:00.000Z",
+    };
+    const readClient = {
+      async list() { return [richMemo]; },
+      async search() { return [richMemo]; },
+      async getBySlug() { return richMemo; },
+      async getRecentBatch() { return [richMemo]; },
+      async syncAll() {
+        return { synced: 1, totalCached: 1, pages: 1, complete: true, syncedAt: "2026-05-03T00:00:00.000Z" };
+      },
+      async searchSynced() { return [richMemo]; },
+      async listSynced() { return [richMemo]; },
+      async getSyncedBySlug() { return richMemo; },
+      getSyncStatus() {
+        return { synced: true, totalCached: 1, complete: true, syncedAt: "2026-05-03T00:00:00.000Z" };
+      },
+    } satisfies FlomoReadClient;
+
+    registerListNotesTool(server, readClient);
+    registerSearchNotesTool(server, readClient);
+    registerGetNoteTool(server, readClient);
+    registerRandomNoteTool(server, readClient, () => 0);
+
+    try {
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+
+      const listed = parseToolJson(await client.callTool({ name: "list_notes", arguments: {} }));
+      expect((listed.items as Record<string, unknown>[])[0]).not.toHaveProperty("html");
+      const searched = parseToolJson(await client.callTool({ name: "search_notes", arguments: { query: "rich" } }));
+      expect((searched.items as Record<string, unknown>[])[0]).not.toHaveProperty("html");
+      const random = parseToolJson(await client.callTool({ name: "random_note", arguments: {} }));
+      expect(random.memo).not.toHaveProperty("html");
+      const plain = parseToolJson(await client.callTool({ name: "get_note", arguments: { slug: "rich-note" } }));
+      expect(plain.memo).not.toHaveProperty("html");
+
+      const withHtml = parseToolJson(await client.callTool({
+        name: "get_note",
+        arguments: { slug: "rich-note", includeHtml: true },
+      }));
+      expect(withHtml.memo).toMatchObject({ slug: "rich-note", html: "<p>Rich note</p>" });
     } finally {
       await client.close();
       await server.close();

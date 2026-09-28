@@ -1,16 +1,28 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { FlomoReadClient } from "../types/flomo.js";
-import { allSyncedNotesScope, recentNotesScope, runJsonTool } from "./common.js";
+import {
+  allSyncedNotesScope,
+  limitSchema,
+  readOnlyToolAnnotations,
+  recentNotesScope,
+  runJsonTool,
+  scopeSchema,
+  toPublicMemos,
+} from "./common.js";
 
 export function registerSearchNotesTool(server: McpServer, readClient: FlomoReadClient): void {
-  server.tool(
+  server.registerTool(
     "search_notes",
-    "Search recent flomo notes by keyword, or the local all-notes sync cache when requested.",
     {
-      query: z.string().min(1),
-      limit: z.number().int().positive().max(100).optional(),
-      scope: z.enum(["recent_notes", "all_synced_notes"]).optional(),
+      title: "Search flomo notes",
+      description: "Search recent flomo notes by keyword, or the local all-notes sync cache when requested.",
+      inputSchema: {
+        query: z.string().min(1).describe("Case-insensitive keyword matched against memo content and tags."),
+        limit: limitSchema,
+        scope: scopeSchema,
+      },
+      annotations: readOnlyToolAnnotations,
     },
     async ({ query, limit, scope }) =>
       runJsonTool(async () => {
@@ -19,14 +31,14 @@ export function registerSearchNotesTool(server: McpServer, readClient: FlomoRead
           const status = readClient.getSyncStatus();
           return {
             ok: true,
-            items,
+            items: toPublicMemos(items),
             scope: allSyncedNotesScope(status.complete, status.syncedAt),
           };
         }
 
         return {
           ok: true,
-          items: await readClient.search(query, limit),
+          items: toPublicMemos(await readClient.search(query, limit)),
           scope: recentNotesScope(),
         };
       }),

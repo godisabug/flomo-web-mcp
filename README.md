@@ -169,9 +169,11 @@ FLOMO_AUTHORIZATION=Bearer your-token-here
 | `list_notes` | 列出最近 memo。 |
 | `sync_notes` | 分页同步 memo 到本地内存缓存，只返回同步统计。 |
 | `search_notes` | 默认搜索最近 memo；传入 `scope: "all_synced_notes"` 时搜索已同步缓存。 |
-| `get_note` | 默认按 `slug` 从最近 memo 定位；传入 `scope: "all_synced_notes"` 时从已同步缓存定位。 |
+| `get_note` | 默认按 `slug` 从最近 memo 定位；传入 `scope: "all_synced_notes"` 时从已同步缓存定位；传入 `includeHtml: true` 时额外返回原始富文本 HTML。 |
 | `random_note` | 默认刷新全量 memo 后随机返回一条；支持 `tags`、`excludeTags` 和 `refresh: false`，刷新失败时回退当前会话缓存。 |
 | `create_note` | 新建 memo。 |
+
+工具返回紧凑 JSON。为节省上下文，memo 默认只返回保留了换行和列表结构的 `content`，不含原始 `html`。只读工具带有 `readOnlyHint` 标注，`create_note` 标注为非只读，便于 MCP 客户端决定是否需要确认。
 
 ## 全量同步边界
 

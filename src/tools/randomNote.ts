@@ -3,7 +3,7 @@ import { z } from "zod";
 import { selectRandomMemo, type RandomSource } from "../randomMemo.js";
 import type { FlomoReadClient, SyncNotesStatus } from "../types/flomo.js";
 import { toPublicError } from "../utils/errors.js";
-import { allSyncedNotesScope, runJsonTool } from "./common.js";
+import { allSyncedNotesScope, readOnlyToolAnnotations, runJsonTool, toPublicMemo } from "./common.js";
 
 interface RandomSourceState {
   items: Awaited<ReturnType<FlomoReadClient["listSynced"]>>;
@@ -24,13 +24,27 @@ export function registerRandomNoteTool(
   readClient: FlomoReadClient,
   rng: RandomSource = Math.random,
 ): void {
-  server.tool(
+  server.registerTool(
     "random_note",
-    "Refresh the all-notes session cache and select one random flomo memo, with optional tag filters and cache fallback.",
     {
-      tags: z.array(z.string()).optional(),
-      excludeTags: z.array(z.string()).optional(),
-      refresh: z.boolean().optional(),
+      title: "Random flomo note",
+      description:
+        "Refresh the all-notes session cache and select one random flomo memo, with optional tag filters and cache fallback.",
+      inputSchema: {
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe("Only pick memos with any of these tags. A parent tag also matches its child tags."),
+        excludeTags: z
+          .array(z.string())
+          .optional()
+          .describe("Never pick memos with any of these tags. Takes precedence over tags."),
+        refresh: z
+          .boolean()
+          .optional()
+          .describe("Re-sync all notes before picking (default true). Set false to reuse the current session cache."),
+      },
+      annotations: readOnlyToolAnnotations,
     },
     async ({ tags, excludeTags, refresh }) =>
       runJsonTool(async () => {
@@ -39,6 +53,7 @@ export function registerRandomNoteTool(
         return {
           ok: true,
           ...selection,
+          memo: selection.memo && toPublicMemo(selection.memo),
           refresh: source.refresh,
           scope: allSyncedNotesScope(source.status.complete, source.status.syncedAt),
         };
