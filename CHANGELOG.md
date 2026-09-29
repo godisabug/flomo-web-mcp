@@ -6,6 +6,7 @@ This project follows short Conventional Commit style summaries in Git history.
 
 ## [Unreleased]
 
+- Rework the README with a quick start (`npx` and `claude mcp add`), an English README, the Authorization screenshot, and sections shared verbatim with flomo-web-cli (guarded by a fingerprint test).
 - Refresh the lockfile to clear new moderate npm audit findings in `qs`, `vitest`, and `esbuild`.
 - Sync incrementally: after the first sync, `sync_notes` fetches only memos changed since the last sync, applies deletions, and resumes incomplete syncs; `full: true` rebuilds the cache. Results add `mode` and `removed`, and `synced` now counts memos added or updated by the run.
 - Add `list_tags` to list tags with memo counts from recent notes or the session sync cache.

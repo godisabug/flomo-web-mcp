@@ -26,6 +26,7 @@
     "dist",
     ".env.example",
     "README.md",
+    "README.en.md",
     "LICENSE",
     "CHANGELOG.md"
   ],
