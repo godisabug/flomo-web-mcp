@@ -6,19 +6,38 @@ This project follows short Conventional Commit style summaries in Git history.
 
 ## [Unreleased]
 
-- Publish to npm from a `v*` tag through GitHub Actions with npm Trusted Publishing, matching flomo-web-cli.
-- Check dependency advisories in a separate daily and on-change `Dependency audit` workflow instead of `npm run verify`, add Dependabot security and grouped version updates, and gate `npm publish` on `npm run audit:prod`.
-- Rework the README with a quick start (`npx` and `claude mcp add`), an English README, the Authorization screenshot, and sections shared verbatim with flomo-web-cli (guarded by a fingerprint test).
-- Refresh the lockfile to clear npm audit findings in `qs`, `fast-uri`, `ip-address`, `vitest`, and `esbuild`.
-- Sync incrementally: after the first sync, `sync_notes` fetches only memos changed since the last sync, applies deletions, and resumes incomplete syncs; `full: true` rebuilds the cache. Results add `mode` and `removed`, and `synced` now counts memos added or updated by the run.
+## 0.2.0
+
+### Breaking changes
+
+- `sync_notes`: `synced` now counts memos added or updated by the run instead of the cache size (use `totalCached`), and results add `mode` and `removed`.
+- Memos no longer include `html` by default; `get_note` accepts `includeHtml: true` to return it.
+
+### Added
+
+- Sync incrementally: after the first sync, `sync_notes` fetches only memos changed since the last sync, applies deletions, and resumes incomplete syncs; `full: true` rebuilds the cache.
 - Add `list_tags` to list tags with memo counts from recent notes or the session sync cache.
+- Register tools with `registerTool`, adding titles, parameter descriptions, and read-only/write annotations.
+- Return compact JSON to reduce tokens per response.
+
+### Changed
+
 - `random_note` only re-syncs when the session cache is missing or older than 10 minutes; `refresh: true` still forces a sync.
 - Share one in-flight sync between concurrent `sync_notes`/`random_note` calls.
-- Register tools with `registerTool`, adding titles, parameter descriptions, and read-only/write annotations.
-- Return compact JSON and omit memo `html` by default; `get_note` accepts `includeHtml: true` to include it.
+- Rework the README with a quick start (`npx` and `claude mcp add`), an English README, the Authorization screenshot, and sections shared verbatim with flomo-web-cli (guarded by a fingerprint test).
+
+### Fixed
+
+- Interpret zoneless flomo date strings (`YYYY-MM-DD HH:mm:ss`) in `FLOMO_TIMEZONE` instead of the host timezone, fixing shifted `createdAt`/`updatedAt` and sync cursors that could skip memos on hosts outside the configured timezone.
 - Keep the Session Sync Cache after `create_note`: the created memo is added to it and only the recent batch is invalidated, so `all_synced_notes` queries keep working without a re-sync.
 - Return a generic message for unexpected (`UNKNOWN`) errors in every tool instead of the raw error message.
-- Interpret zoneless flomo date strings (`YYYY-MM-DD HH:mm:ss`) in `FLOMO_TIMEZONE` instead of the host timezone, fixing shifted `createdAt`/`updatedAt` and sync cursors that could skip memos on hosts outside the configured timezone.
+
+### Maintenance
+
+- Publish to npm from a `v*` tag through GitHub Actions with npm Trusted Publishing, matching flomo-web-cli.
+- Check dependency advisories in a separate daily and on-change `Dependency audit` workflow instead of `npm run verify`, add Dependabot security and grouped version updates, and gate `npm publish` on `npm run audit:prod`.
+- Refresh the lockfile to clear npm audit findings in `qs`, `fast-uri`, `ip-address`, `vitest`, and `esbuild`.
+- Align the shared flomo core with `flomo-web-cli` v0.2.0.
 
 ## 0.1.6
 

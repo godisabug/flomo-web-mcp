@@ -1,6 +1,8 @@
 # Shared flomo Core Synchronization
 
-The Shared Core Baseline for `flomo-web-mcp` 0.1.6 is `flomo-web-cli` tag `v0.1.6` at commit `e9711de`.
+The Shared Core Baseline for `flomo-web-mcp` 0.2.0 is `flomo-web-cli` tag `v0.2.0` at commit `9c6400b`.
+
+In 0.2.0 the shared behavior changes (timezone-aware date and sync-cursor parsing, generic messages for unexpected errors) were made in flomo-web-mcp first (#1) and ported to flomo-web-cli (godisabug/flomo-web-cli#5).
 
 ## Parity contract
 
