@@ -1,0 +1,63 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'godisabug/flomo-web-mcp'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          const expectedTag = `v${pkg.version}`;
+          const actualTag = process.env.GITHUB_REF_NAME;
+
+          if (actualTag !== expectedTag) {
+            console.error(`Tag ${actualTag} does not match package.json version ${pkg.version}. Expected ${expectedTag}.`);
+            process.exit(1);
+          }
+          NODE
+
+      - name: Check npm version is unpublished
+        run: |
+          PACKAGE_NAME="$(node -p "require('./package.json').name")"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry "https://registry.npmjs.org" >/dev/null 2>&1; then
+            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} is already published." >&2
+            exit 1
+          fi
+
+      - name: Verify package
+        run: npm run verify
+
+      - name: Publish to npm
+        run: npm publish --access public
