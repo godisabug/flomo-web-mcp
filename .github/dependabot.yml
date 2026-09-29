@@ -14,6 +14,9 @@ updates:
       # @types/node tracks the minimum supported Node.js version (package.json#engines); bump it by hand.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # Require Node.js >= 22.12; adopt them in 0.3.0 together with the new engines minimum.
+      - dependency-name: vitest
+        versions: [">=5"]
 
   - package-ecosystem: github-actions
     directory: /
