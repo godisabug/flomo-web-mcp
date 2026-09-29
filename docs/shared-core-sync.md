@@ -1,6 +1,10 @@
 # Shared flomo Core Synchronization
 
-The Shared Core Baseline for `flomo-web-mcp` 0.2.0 is `flomo-web-cli` tag `v0.2.0` at commit `9c6400b`.
+The Shared Core Baseline for `flomo-web-mcp` 0.2.1 is `flomo-web-cli` tag `v0.2.1` at commit `634a12c`.
+
+0.2.1 changes no shared flomo behavior; both packages announce the Node.js 22.12 requirement for 0.3.0.
+
+Previous baseline: 0.2.0 ↔ `v0.2.0` (`9c6400b`).
 
 In 0.2.0 the shared behavior changes (timezone-aware date and sync-cursor parsing, generic messages for unexpected errors) were made in flomo-web-mcp first (#1) and ported to flomo-web-cli (godisabug/flomo-web-cli#5).
 

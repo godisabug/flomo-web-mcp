@@ -6,6 +6,23 @@ This project follows short Conventional Commit style summaries in Git history.
 
 ## [Unreleased]
 
+## 0.2.1
+
+### Deprecated
+
+- Node.js 20 reached end-of-life in April 2026. 0.3.0 will require Node.js 22.12 or newer; on older versions the server logs an upgrade warning to stderr at startup. If you cannot upgrade Node.js yet, pin `flomo-web-mcp@0.2` in your MCP client configuration.
+
+### Changed
+
+- Tool input schemas no longer declare `additionalProperties: false` (zod 4). Unknown arguments were and still are ignored.
+
+### Maintenance
+
+- Update `@modelcontextprotocol/sdk` to 1.30, zod to 4, and dotenv to 18. `.env` is loaded with `quiet: true` so nothing can reach stdout (JSON-RPC), and the stdio smoke test now runs next to a `.env` file.
+- Run CI on Node.js 20.19, 22, and 24, and update GitHub Actions to `actions/checkout` and `actions/setup-node` v7.
+- Dependabot holds updates that require Node.js 22.12 (`vitest` 5) until 0.3.0, and ignores `@types/node` majors.
+- Align the shared flomo core with `flomo-web-cli` v0.2.1.
+
 ## 0.2.0
 
 ### Breaking changes
