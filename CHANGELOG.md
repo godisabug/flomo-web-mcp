@@ -6,6 +6,7 @@ This project follows short Conventional Commit style summaries in Git history.
 
 ## [Unreleased]
 
+- Publish to npm from a `v*` tag through GitHub Actions with npm Trusted Publishing, matching flomo-web-cli.
 - Check dependency advisories in a separate daily and on-change `Dependency audit` workflow instead of `npm run verify`, add Dependabot security and grouped version updates, and gate `npm publish` on `npm run audit:prod`.
 - Rework the README with a quick start (`npx` and `claude mcp add`), an English README, the Authorization screenshot, and sections shared verbatim with flomo-web-cli (guarded by a fingerprint test).
 - Refresh the lockfile to clear npm audit findings in `qs`, `fast-uri`, `ip-address`, `vitest`, and `esbuild`.

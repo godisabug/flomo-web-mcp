@@ -30,11 +30,24 @@ Use Node.js 20.19.0 or newer.
 
 ## Release
 
-1. Update `package.json`, `package-lock.json`, `CHANGELOG.md`, and the Shared Core Baseline.
-2. Run `npm run verify` and inspect `npm pack --dry-run --json`.
-3. Confirm the target version is unpublished and authenticate with npm.
-4. Commit the release, create and push the matching `vX.Y.Z` tag, then run `npm publish --access public`.
-5. Verify the registry version and installed package smoke test.
+npm publishing is handled by `.github/workflows/publish.yml` when a `v*` tag is pushed, the same way as flomo-web-cli. The workflow verifies the package, checks that the tag matches `package.json#version`, checks that the version is not already published, and then runs `npm publish --access public` with npm Trusted Publishing (no npm token is stored). `prepublishOnly` blocks the release if a runtime dependency has an advisory.
+
+npm Trusted Publishing is configured once on npmjs.com for:
+
+- Package: `flomo-web-mcp`
+- Repository: `godisabug/flomo-web-mcp`
+- Workflow: `publish.yml`
+
+To publish a new version:
+
+1. Move the `CHANGELOG.md` Unreleased entries under the new version and, for a Shared Core release, update the baseline in `docs/shared-core-sync.md`.
+2. Run `npm version <version> --no-git-tag-version` and `npm run verify`.
+3. Commit the release, create the matching annotated tag, and push both:
+
+```bash
+git tag -a vX.Y.Z -m vX.Y.Z
+git push origin main --follow-tags
+```
 
 ## Dependency Security
 
