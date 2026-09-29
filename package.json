@@ -40,7 +40,10 @@
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "smoke:stdio": "node scripts/smoke-stdio.mjs",
     "prepack": "npm run build",
-    "verify": "npm run typecheck && npm run typecheck:test && npm test && npm run build && npm run smoke:stdio && npm audit --audit-level=moderate"
+    "audit:prod": "npm audit --omit=dev --audit-level=moderate",
+    "audit:all": "npm audit --audit-level=moderate",
+    "prepublishOnly": "npm run audit:prod",
+    "verify": "npm run typecheck && npm run typecheck:test && npm test && npm run build && npm run smoke:stdio"
   },
   "engines": {
     "node": ">=20.19.0"

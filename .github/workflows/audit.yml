@@ -1,0 +1,41 @@
+name: Dependency audit
+
+# Kept separate from CI so that advisories published after a change do not fail
+# unrelated pushes. Runs when dependencies change and daily; Dependabot opens the
+# fix PRs. Releases are gated by the prepublishOnly audit in package.json.
+on:
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - package.json
+      - package-lock.json
+  schedule:
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+
+      - name: Audit runtime dependencies
+        run: npm run audit:prod
+
+      - name: Audit all dependencies
+        run: npm run audit:all
