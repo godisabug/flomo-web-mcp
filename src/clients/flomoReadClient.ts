@@ -9,6 +9,7 @@ import type {
   SyncNotesStatus,
 } from "../types/flomo.js";
 import { FlomoRequestError } from "../utils/errors.js";
+import { parseDateTimeInTimeZone } from "../utils/time.js";
 import { appendQueryString, buildFlomoWebQuery, getFlomoTz } from "./flomoWeb.js";
 import type { FlomoHttpClient } from "./http.js";
 
@@ -28,8 +29,10 @@ export class BearerFlomoReadClient implements FlomoReadClient {
     complete: boolean;
     items: Memo[];
     syncedAt: string;
-    nextCursor?: MemoPageCursor;
+    /** Cursor of the last memo received; the next sync continues after it. */
+    resumeCursor?: MemoPageCursor;
   };
+  private syncInFlight?: { key: string; promise: Promise<SyncNotesResult> };
 
   constructor(
     private readonly config: EnvConfig,
@@ -59,7 +62,9 @@ export class BearerFlomoReadClient implements FlomoReadClient {
     const endpoint = this.buildReadEndpoint(this.config.readEndpoint ?? DEFAULT_READ_ENDPOINT);
     const raw = await this.httpClient.requestJson<unknown>(endpoint);
     const rawItems = extractMemoArray(raw);
-    const items = rawItems.map((item) => parseMemo(item, this.config.webBaseUrl ?? this.config.baseUrl));
+    const items = rawItems.map((item) =>
+      parseMemo(item, this.config.webBaseUrl ?? this.config.baseUrl, this.config.timezone),
+    );
     this.cache = {
       expiresAt: Date.now() + CACHE_TTL_MS,
       items,
@@ -70,9 +75,30 @@ export class BearerFlomoReadClient implements FlomoReadClient {
   async syncAll(options: SyncNotesOptions = {}): Promise<SyncNotesResult> {
     const pageSize = normalizeBoundedInteger(options.pageSize, DEFAULT_SYNC_PAGE_SIZE, MAX_SYNC_PAGE_SIZE);
     const maxPages = normalizeBoundedInteger(options.maxPages, DEFAULT_SYNC_MAX_PAGES, MAX_SYNC_MAX_PAGES);
-    const bySlug = new Map<string, Memo>();
-    let cursor: MemoPageCursor | undefined = { latestUpdatedAt: 0, latestSlug: "" };
-    let nextCursor: MemoPageCursor | undefined;
+    const full = options.full === true;
+    const key = `${pageSize}:${maxPages}:${full}`;
+    if (this.syncInFlight?.key === key) {
+      return this.syncInFlight.promise;
+    }
+
+    const promise = this.runSync(pageSize, maxPages, full).finally(() => {
+      if (this.syncInFlight?.promise === promise) {
+        this.syncInFlight = undefined;
+      }
+    });
+    this.syncInFlight = { key, promise };
+    return promise;
+  }
+
+  private async runSync(pageSize: number, maxPages: number, full: boolean): Promise<SyncNotesResult> {
+    // The sync endpoint returns every memo changed after the cursor, deletions included, so an
+    // existing cache only needs the changes since its resume cursor.
+    const previous = full ? undefined : this.syncedCache;
+    const bySlug = new Map<string, Memo>(previous?.items.map((item) => [item.slug, item]) ?? []);
+    const upserted = new Set<string>();
+    let removed = 0;
+    let resumeCursor = previous?.resumeCursor;
+    let cursor: MemoPageCursor = resumeCursor ?? { latestUpdatedAt: 0, latestSlug: "" };
     let complete = false;
     let pages = 0;
 
@@ -82,16 +108,24 @@ export class BearerFlomoReadClient implements FlomoReadClient {
 
       for (const item of page.items) {
         bySlug.set(item.slug, item);
+        upserted.add(item.slug);
+      }
+      for (const slug of page.deletedSlugs) {
+        upserted.delete(slug);
+        if (bySlug.delete(slug)) {
+          removed += 1;
+        }
       }
 
-      nextCursor = page.nextCursor;
-      if (page.rawCount === 0 || page.rawCount < pageSize || !nextCursor) {
+      if (page.nextCursor) {
+        resumeCursor = page.nextCursor;
+      }
+      if (page.rawCount === 0 || page.rawCount < pageSize || !page.nextCursor) {
         complete = true;
-        nextCursor = undefined;
         break;
       }
 
-      cursor = nextCursor;
+      cursor = page.nextCursor;
     }
 
     const syncedAt = new Date().toISOString();
@@ -100,11 +134,14 @@ export class BearerFlomoReadClient implements FlomoReadClient {
       complete,
       items,
       syncedAt,
-      nextCursor,
+      resumeCursor,
     };
+    const nextCursor = complete ? undefined : resumeCursor;
 
     return {
-      synced: items.length,
+      mode: previous ? "incremental" : "full",
+      synced: upserted.size,
+      removed,
       totalCached: items.length,
       pages,
       complete,
@@ -139,13 +176,17 @@ export class BearerFlomoReadClient implements FlomoReadClient {
       totalCached: this.syncedCache.items.length,
       complete: this.syncedCache.complete,
       syncedAt: this.syncedCache.syncedAt,
-      ...(this.syncedCache.nextCursor ? { nextCursor: this.syncedCache.nextCursor } : {}),
+      ...(!this.syncedCache.complete && this.syncedCache.resumeCursor
+        ? { nextCursor: this.syncedCache.resumeCursor }
+        : {}),
     };
   }
 
-  clearCache(): void {
+  recordCreated(memo: Memo): void {
     this.cache = undefined;
-    this.syncedCache = undefined;
+    if (this.syncedCache) {
+      this.syncedCache.items = [memo, ...this.syncedCache.items.filter((item) => item.slug !== memo.slug)];
+    }
   }
 
   private buildReadEndpoint(endpoint: string): string {
@@ -159,8 +200,9 @@ export class BearerFlomoReadClient implements FlomoReadClient {
     return appendQueryString(endpoint, params);
   }
 
-  private async getSyncPage(cursor: MemoPageCursor | undefined, pageSize: number): Promise<{
+  private async getSyncPage(cursor: MemoPageCursor, pageSize: number): Promise<{
     items: Memo[];
+    deletedSlugs: string[];
     rawCount: number;
     nextCursor?: MemoPageCursor;
   }> {
@@ -171,21 +213,25 @@ export class BearerFlomoReadClient implements FlomoReadClient {
     return {
       items: rawItems
         .filter((item) => !isDeletedMemo(item))
-        .map((item) => parseMemo(item, this.config.webBaseUrl ?? this.config.baseUrl)),
+        .map((item) => parseMemo(item, this.config.webBaseUrl ?? this.config.baseUrl, this.config.timezone)),
+      deletedSlugs: rawItems
+        .filter(isDeletedMemo)
+        .flatMap((item) => (isRecord(item) ? [pickString(item, ["slug", "memo_slug", "memo_id", "id"])] : []))
+        .filter((slug): slug is string => slug !== undefined),
       rawCount: rawItems.length,
-      nextCursor: extractNextCursor(rawItems),
+      nextCursor: extractNextCursor(rawItems, this.config.timezone),
     };
   }
 
-  private buildSyncEndpoint(endpoint: string, cursor: MemoPageCursor | undefined, pageSize: number): string {
+  private buildSyncEndpoint(endpoint: string, cursor: MemoPageCursor, pageSize: number): string {
     if (/[?&]sign=/.test(endpoint)) {
       return endpoint;
     }
 
     const params = buildFlomoWebQuery({
       limit: pageSize,
-      latest_updated_at: cursor?.latestUpdatedAt ?? 0,
-      latest_slug: cursor?.latestSlug ?? "",
+      latest_updated_at: cursor.latestUpdatedAt,
+      latest_slug: cursor.latestSlug,
       tz: getFlomoTz(this.config.timezone),
     });
     return appendQueryString(endpoint, params);
@@ -282,14 +328,17 @@ function isDeletedMemo(raw: unknown): boolean {
   return deletedAt !== null && deletedAt !== undefined && String(deletedAt).trim() !== "";
 }
 
-function extractNextCursor(rawItems: unknown[]): MemoPageCursor | undefined {
+function extractNextCursor(rawItems: unknown[], timezone: string): MemoPageCursor | undefined {
   const raw = rawItems.at(-1);
   if (!isRecord(raw)) {
     return undefined;
   }
 
   const latestSlug = pickString(raw, ["slug", "memo_slug", "memo_id", "id"]);
-  const latestUpdatedAt = pickUnixSeconds(raw.updated_at ?? raw.updatedAt ?? raw.updated_time ?? raw.modified_at ?? raw.modified);
+  const latestUpdatedAt = pickUnixSeconds(
+    raw.updated_at ?? raw.updatedAt ?? raw.updated_time ?? raw.modified_at ?? raw.modified,
+    timezone,
+  );
   if (!latestSlug || latestUpdatedAt === undefined) {
     return undefined;
   }
@@ -315,7 +364,7 @@ function pickString(record: Record<string, unknown>, keys: string[]): string | u
   return undefined;
 }
 
-function pickUnixSeconds(value: unknown): number | undefined {
+function pickUnixSeconds(value: unknown, timezone: string): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value < 1_000_000_000_000 ? Math.trunc(value) : Math.trunc(value / 1000);
   }
@@ -323,10 +372,10 @@ function pickUnixSeconds(value: unknown): number | undefined {
   if (typeof value === "string" && value.trim()) {
     const numeric = Number(value);
     if (Number.isFinite(numeric)) {
-      return pickUnixSeconds(numeric);
+      return pickUnixSeconds(numeric, timezone);
     }
 
-    const parsed = Date.parse(value);
+    const parsed = parseDateTimeInTimeZone(value, timezone);
     if (Number.isFinite(parsed)) {
       return Math.trunc(parsed / 1000);
     }

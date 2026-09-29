@@ -13,7 +13,7 @@ export class BearerFlomoWriteClient implements FlomoWriteClient {
   constructor(
     private readonly config: EnvConfig,
     private readonly httpClient: FlomoHttpClient,
-    private readonly onCreated?: () => void,
+    private readonly onCreated?: (memo: Memo) => void,
   ) {}
 
   async create(input: { content: string; tags?: string[] }): Promise<Memo> {
@@ -39,9 +39,9 @@ export class BearerFlomoWriteClient implements FlomoWriteClient {
       body: JSON.stringify(payload),
     });
 
-    const rawMemo = extractCreatedMemo(raw);
-    this.onCreated?.();
-    return parseMemo(rawMemo, this.config.webBaseUrl ?? this.config.baseUrl);
+    const memo = parseMemo(extractCreatedMemo(raw), this.config.webBaseUrl ?? this.config.baseUrl, this.config.timezone);
+    this.onCreated?.(memo);
+    return memo;
   }
 }
 

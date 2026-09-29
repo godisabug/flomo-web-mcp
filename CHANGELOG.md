@@ -6,6 +6,17 @@ This project follows short Conventional Commit style summaries in Git history.
 
 ## [Unreleased]
 
+- Refresh the lockfile to clear new moderate npm audit findings in `qs`, `vitest`, and `esbuild`.
+- Sync incrementally: after the first sync, `sync_notes` fetches only memos changed since the last sync, applies deletions, and resumes incomplete syncs; `full: true` rebuilds the cache. Results add `mode` and `removed`, and `synced` now counts memos added or updated by the run.
+- Add `list_tags` to list tags with memo counts from recent notes or the session sync cache.
+- `random_note` only re-syncs when the session cache is missing or older than 10 minutes; `refresh: true` still forces a sync.
+- Share one in-flight sync between concurrent `sync_notes`/`random_note` calls.
+- Register tools with `registerTool`, adding titles, parameter descriptions, and read-only/write annotations.
+- Return compact JSON and omit memo `html` by default; `get_note` accepts `includeHtml: true` to include it.
+- Keep the Session Sync Cache after `create_note`: the created memo is added to it and only the recent batch is invalidated, so `all_synced_notes` queries keep working without a re-sync.
+- Return a generic message for unexpected (`UNKNOWN`) errors in every tool instead of the raw error message.
+- Interpret zoneless flomo date strings (`YYYY-MM-DD HH:mm:ss`) in `FLOMO_TIMEZONE` instead of the host timezone, fixing shifted `createdAt`/`updatedAt` and sync cursors that could skip memos on hosts outside the configured timezone.
+
 ## 0.1.6
 
 - Align the shared flomo core behavior with `flomo-web-cli` v0.1.6.

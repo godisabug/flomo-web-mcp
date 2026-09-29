@@ -50,6 +50,6 @@ export function toPublicError(error: unknown): { code: FlomoErrorCode | "UNKNOWN
 
   return {
     code: "UNKNOWN",
-    message: error instanceof Error ? error.message : "未知错误。",
+    message: "未知错误。",
   };
 }

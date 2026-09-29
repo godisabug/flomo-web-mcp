@@ -41,9 +41,9 @@ describe("BearerFlomoWriteClient", () => {
         };
       },
     } as unknown as FlomoHttpClient;
-    let invalidated = false;
-    const client = new BearerFlomoWriteClient(makeConfig({ timezone: "UTC" }), httpClient, () => {
-      invalidated = true;
+    let createdSlug: string | undefined;
+    const client = new BearerFlomoWriteClient(makeConfig({ timezone: "UTC" }), httpClient, (created) => {
+      createdSlug = created.slug;
     });
 
     const memo = await client.create({ content: "MCP 写入测试", tags: ["flomo", "mcp"] });
@@ -56,7 +56,7 @@ describe("BearerFlomoWriteClient", () => {
     });
     expect(capturedEndpoint).toBe("/api/v1/memo");
     expect(capturedInit?.method).toBe("PUT");
-    expect(invalidated).toBe(true);
+    expect(createdSlug).toBe("created-slug");
 
     const body = JSON.parse(String(capturedInit?.body)) as Record<string, unknown>;
     expect(body).toMatchObject({

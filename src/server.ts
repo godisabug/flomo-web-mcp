@@ -7,6 +7,7 @@ import { registerCreateNoteTool } from "./tools/createNote.js";
 import { registerGetNoteTool } from "./tools/getNote.js";
 import { jsonToolResponse } from "./tools/common.js";
 import { registerListNotesTool } from "./tools/listNotes.js";
+import { registerListTagsTool } from "./tools/listTags.js";
 import { registerRandomNoteTool } from "./tools/randomNote.js";
 import { registerSearchNotesTool } from "./tools/searchNotes.js";
 import { registerSyncNotesTool } from "./tools/syncNotes.js";
@@ -20,14 +21,21 @@ export function createFlomoMcpServer(config: EnvConfig): McpServer {
 
   const httpClient = new FlomoHttpClient(config);
   const readClient = new BearerFlomoReadClient(config, httpClient);
-  const writeClient = new BearerFlomoWriteClient(config, httpClient, () => readClient.clearCache());
+  const writeClient = new BearerFlomoWriteClient(config, httpClient, (memo) => readClient.recordCreated(memo));
 
-  server.tool("ping", "Check whether the flomo MCP server is reachable.", {}, async () =>
-    jsonToolResponse({
-      ok: true,
-      name: packageInfo.name,
-      version: packageInfo.version,
-    }),
+  server.registerTool(
+    "ping",
+    {
+      title: "Ping flomo MCP server",
+      description: "Check whether the flomo MCP server is reachable.",
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () =>
+      jsonToolResponse({
+        ok: true,
+        name: packageInfo.name,
+        version: packageInfo.version,
+      }),
   );
 
   registerCreateNoteTool(server, writeClient);
@@ -35,6 +43,7 @@ export function createFlomoMcpServer(config: EnvConfig): McpServer {
   registerSyncNotesTool(server, readClient);
   registerRandomNoteTool(server, readClient);
   registerSearchNotesTool(server, readClient);
+  registerListTagsTool(server, readClient);
   registerGetNoteTool(server, readClient);
 
   return server;

@@ -28,7 +28,7 @@
 flowchart LR
   Host["MCP 客户端"] -->|启动 stdio server| Server["flomo-web-mcp"]
   Server -->|读取 env| Config["本地配置<br/>FLOMO_AUTHORIZATION 等"]
-  Server -->|注册工具| Tools["MCP 工具<br/>list / sync / search / get / random / create"]
+  Server -->|注册工具| Tools["MCP 工具<br/>list / sync / search / tags / get / random / create"]
   Host -->|调用工具| Tools
   Tools -->|请求 flomo Web| Flomo["flomo Web 内部接口"]
   Flomo -->|返回 memo 数据| Parser["解析与错误映射"]
@@ -167,11 +167,14 @@ FLOMO_AUTHORIZATION=Bearer your-token-here
 | --- | --- |
 | `ping` | 检查 server 是否可用。 |
 | `list_notes` | 列出最近 memo。 |
-| `sync_notes` | 分页同步 memo 到本地内存缓存，只返回同步统计。 |
+| `sync_notes` | 分页同步 memo 到本地内存缓存，只返回同步统计；已有缓存时只拉取上次同步后的变更，`full: true` 强制全量重建。 |
+| `list_tags` | 列出 tag 及使用次数，按次数降序；默认统计最近 memo，传入 `scope: "all_synced_notes"` 时统计已同步缓存。 |
 | `search_notes` | 默认搜索最近 memo；传入 `scope: "all_synced_notes"` 时搜索已同步缓存。 |
-| `get_note` | 默认按 `slug` 从最近 memo 定位；传入 `scope: "all_synced_notes"` 时从已同步缓存定位。 |
-| `random_note` | 默认刷新全量 memo 后随机返回一条；支持 `tags`、`excludeTags` 和 `refresh: false`，刷新失败时回退当前会话缓存。 |
+| `get_note` | 默认按 `slug` 从最近 memo 定位；传入 `scope: "all_synced_notes"` 时从已同步缓存定位；传入 `includeHtml: true` 时额外返回原始富文本 HTML。 |
+| `random_note` | 从全量同步缓存中随机返回一条；缓存不存在或超过 10 分钟时先刷新。支持 `tags`、`excludeTags` 和 `refresh`，刷新失败时回退当前会话缓存。 |
 | `create_note` | 新建 memo。 |
+
+工具返回紧凑 JSON。为节省上下文，memo 默认只返回保留了换行和列表结构的 `content`，不含原始 `html`。只读工具带有 `readOnlyHint` 标注，`create_note` 标注为非只读，便于 MCP 客户端决定是否需要确认。
 
 ## 全量同步边界
 
@@ -183,9 +186,11 @@ FLOMO_AUTHORIZATION=Bearer your-token-here
 }
 ```
 
-`sync_notes` 支持 `pageSize`（最大 200）和 `maxPages`（最大 100）。如果达到页数上限但仍可能有更多笔记，返回值中的 `complete` 会是 `false`。
+`sync_notes` 支持 `pageSize`（最大 200）和 `maxPages`（最大 100）。如果达到页数上限但仍可能有更多笔记，返回值中的 `complete` 会是 `false`，再次调用会从中断处继续。
 
-`random_note` 默认会先执行全量同步，再从结果中随机选择一条 memo。可传入 `tags` 作为白名单、`excludeTags` 作为黑名单；父级 tag 会匹配其层级子 tag，黑名单优先。如果刷新失败但当前 server session 已有同步缓存，工具会从缓存中选择并在 `refresh` metadata 中说明回退；传入 `refresh: false` 可直接使用现有缓存。
+首次同步会拉取全部 memo；之后再调用 `sync_notes`（包括 `random_note` 的自动刷新）只拉取上次同步之后新增、修改或删除的 memo，并合并进缓存。返回值中的 `mode` 为 `full` 或 `incremental`，`synced` 是本次新增或更新的数量，`removed` 是本次移除的已删除 memo 数量，`totalCached` 是缓存总数。如果缓存看起来不对，可传入 `full: true` 丢弃缓存并重新全量同步。
+
+`random_note` 在当前会话没有同步缓存、或缓存已超过 10 分钟时，会先执行全量同步，再从结果中随机选择一条 memo；`refresh: true` 强制同步，`refresh: false` 始终使用现有缓存。可传入 `tags` 作为白名单、`excludeTags` 作为黑名单；父级 tag 会匹配其层级子 tag，黑名单优先。如果刷新失败但当前 server session 已有同步缓存，工具会从缓存中选择并在 `refresh` metadata 中说明回退。
 
 ```json
 {

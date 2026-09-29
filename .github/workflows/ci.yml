@@ -29,3 +29,8 @@ jobs:
 
       - name: Verify
         run: npm run verify
+
+      - name: Test with UTC host timezone
+        run: npm test
+        env:
+          TZ: UTC
