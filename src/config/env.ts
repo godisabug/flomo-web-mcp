@@ -1,4 +1,4 @@
-import "dotenv/config";
+import { config as loadDotenv } from "dotenv";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
@@ -39,6 +39,10 @@ const EnvSchema = z.object({
   FLOMO_WEB_PLATFORM: z.string().optional(),
   FLOMO_REQUEST_TIMEOUT_MS: z.string().optional(),
 });
+
+// stdout carries JSON-RPC. dotenv 17.0 logged to stdout and later versions log to stderr by
+// default, so load .env quietly.
+loadDotenv({ quiet: true });
 
 const defaultDeviceId = randomUUID();
 
