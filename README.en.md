@@ -89,7 +89,7 @@ The Session Sync Cache lives only in the memory of the current server process, s
 
 <!-- shared: kept identical in flomo-web-cli and flomo-web-mcp; update both -->
 
-- Node.js 20.19.0 or newer (ships with npm / npx).
+- Node.js 20.19.0 or newer (ships with npm / npx). Node.js 20 reached end-of-life in April 2026, and **0.3.0 will require Node.js 22.12 or newer**; running on Node.js 20 prints an upgrade notice.
 - Your own flomo Web session `Authorization` value; see [Getting Authorization](#getting-authorization). flomo Pro is not required.
 
 <!-- /shared -->
