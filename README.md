@@ -89,7 +89,7 @@
 
 <!-- shared: 与 flomo-web-cli / flomo-web-mcp 共用，修改时两个仓库同步 -->
 
-- Node.js 20.19.0 或更高版本（自带 npm / npx）。
+- Node.js 20.19.0 或更高版本（自带 npm / npx）。Node.js 20 已于 2026 年 4 月停止维护，**0.3.0 起将需要 Node.js 22.12 或更高版本**；在 Node.js 20 上运行时会看到升级提示。
 - 你自己的 flomo Web 登录态 `Authorization`，获取方法见[获取 Authorization](#获取-authorization)。不需要 flomo Pro。
 
 <!-- /shared -->

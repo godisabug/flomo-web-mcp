@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 // flomo-web-mcp. If you change one, apply the same change in the other repository and
 // update both fingerprints below.
 const sharedFingerprints = {
-  "README.md": "27174a27cc9bd9783078ac120cc4674d861023dc7ddadcc083d893d1f627d38b",
-  "README.en.md": "ccaaadb355c20b474b6382171f25cfb02315085efffb06fe3b1006b522510fae"
+  "README.md": "2e16e421be22000b908177a769380723e3bf5055af856cdd73d704bdf99f8874",
+  "README.en.md": "04eeb354cfa58a82b630f81914ed82813f7dfd74b0a8fa36fb1e17e0fdf93536"
 };
 
 function sharedSections(readme: string): string[] {
