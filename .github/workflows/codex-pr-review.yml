@@ -1,0 +1,20 @@
+# Codex reviews each PR; see https://github.com/godisabug/workflows#codex-pr-审查
+name: Codex PR review
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write # only used to join Tailscale when TS_OAUTH_CLIENT_ID is set
+
+jobs:
+  codex:
+    uses: godisabug/workflows/.github/workflows/codex-pr-review.yml@v1
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      RESPONSES_API_ENDPOINT: ${{ secrets.RESPONSES_API_ENDPOINT }}
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
